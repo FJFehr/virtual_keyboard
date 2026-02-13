@@ -29,15 +29,29 @@ uv run python app.py
 
 Open http://127.0.0.1:7860
 
-## Deploy to Hugging Face Spaces (Gradio SDK)
+## Deploy to Hugging Face Spaces
 
-Include these files at the repo root:
+### Quick Setup
 
-- app.py
-- keyboard.html
-- requirements.txt
+1. **Create a Space**
+   - Go to https://huggingface.co/spaces
+   - Click "Create new Space"
+   - Choose **Gradio SDK**
+   - Name it (e.g., `virtual_keyboard`)
 
-Then create a Gradio Space and push the repo.
+2. **Add HF remote and push**
+   ```bash
+   git remote add hf git@hf.co:spaces/YOUR_USERNAME/virtual_keyboard
+   git push hf main
+   ```
+
+That's it! Your Space will automatically deploy.
+
+### Push to Both GitHub and HF
+
+```bash
+git push origin main && git push hf main
+```
 
 ## API
 
