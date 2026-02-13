@@ -1,113 +1,267 @@
-/* Virtual MIDI Keyboard - Styles */
+/* Virtual MIDI Keyboard - Retro Synth Theme */
 
 /* Layout */
 body { 
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; 
-  padding: 12px; 
+  font-family: 'Courier New', 'Consolas', monospace; 
+  padding: 0;
+  margin: 0;
+  background: linear-gradient(180deg, #0a0a0f 0%, #1a0a1f 100%);
+  color: #e0e0ff;
+  min-height: 100vh;
+}
+
+/* Welcome Header */
+.welcome-header {
+  text-align: center;
+  padding: 30px 20px 20px;
+  background: linear-gradient(180deg, rgba(138, 43, 226, 0.1) 0%, transparent 100%);
+  border-bottom: 2px solid rgba(138, 43, 226, 0.3);
+}
+
+.neon-text {
+  font-size: 2.5em;
+  font-weight: bold;
+  margin: 0 0 10px;
+  color: #ff00ff;
+  text-shadow: 
+    0 0 10px #ff00ff,
+    0 0 20px #ff00ff,
+    0 0 30px #ff00ff,
+    0 0 40px #8b00ff,
+    0 0 70px #8b00ff;
+  letter-spacing: 2px;
+}
+
+.subtitle {
+  font-size: 1em;
+  color: #00ffff;
+  margin: 0;
+  text-shadow: 0 0 5px #00ffff;
+  opacity: 0.9;
 }
 
 #mainContainer { 
-  display: flex; 
-  gap: 20px; 
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
-#leftPanel { 
-  flex: 0 0 auto; 
+.keyboard-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
 }
 
-#rightPanel { 
-  flex: 1; 
-  min-width: 300px; 
+.monitor-section {
+  width: 100%;
+  max-width: 1200px;
 }
 
 /* Keyboard */
 #keyboard { 
   display: flex; 
-  user-select: none; 
+  user-select: none;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 15px;
+  border: 2px solid rgba(138, 43, 226, 0.5);
+  box-shadow: 
+    0 0 20px rgba(138, 43, 226, 0.3),
+    inset 0 0 30px rgba(0, 0, 0, 0.5);
 }
 
 .key { 
   width: 42px; 
   height: 180px; 
-  border: 1px solid #333; 
+  border: 2px solid #ff00ff; 
   margin: 0 1px; 
-  background: white; 
+  background: linear-gradient(180deg, #fff 0%, #f0f0ff 100%); 
   position: relative; 
   display: flex; 
   align-items: flex-end; 
   justify-content: center; 
-  cursor: pointer; 
+  cursor: pointer;
+  transition: all 0.1s ease;
+  box-shadow: 
+    0 4px 8px rgba(0, 0, 0, 0.3),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.key:hover {
+  box-shadow: 
+    0 0 15px rgba(255, 0, 255, 0.5),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .key.black { 
   width: 30px; 
   height: 110px; 
-  background: #222; 
-  color: white; 
+  background: linear-gradient(180deg, #1a0a2e 0%, #0a0a1f 100%);
+  border: 2px solid #8b00ff;
+  color: #00ffff; 
   margin-left: -15px; 
   margin-right: -15px; 
   z-index: 2; 
-  position: relative; 
+  position: relative;
+  box-shadow: 
+    0 4px 8px rgba(0, 0, 0, 0.5),
+    inset 0 -2px 5px rgba(138, 43, 226, 0.3);
+}
+
+.key.black:hover {
+  box-shadow: 
+    0 0 15px rgba(0, 255, 255, 0.5),
+    inset 0 -2px 5px rgba(138, 43, 226, 0.3);
 }
 
 /* Controls */
 .controls { 
-  margin-top: 10px; 
   display: flex; 
-  gap: 8px; 
+  gap: 10px; 
   align-items: center; 
-  flex-wrap: wrap; 
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  border: 1px solid rgba(138, 43, 226, 0.3);
 }
 
+.controls label {
+  color: #00ffff;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+select,
 button { 
-  padding: 8px 12px; 
+  padding: 8px 16px;
+  background: linear-gradient(180deg, #8b00ff 0%, #5a00cc 100%);
+  color: #00ffff;
+  border: 2px solid #ff00ff;
+  border-radius: 5px;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 10px rgba(138, 43, 226, 0.3);
+}
+
+select:hover,
+button:hover:not(:disabled) { 
+  background: linear-gradient(180deg, #a000ff 0%, #7000ee 100%);
+  box-shadow: 
+    0 0 20px rgba(255, 0, 255, 0.6),
+    0 0 30px rgba(138, 43, 226, 0.4);
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 0 10px rgba(138, 43, 226, 0.3);
+}
+
+button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+input[type="checkbox"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  accent-color: #ff00ff;
 }
 
 #status { 
-  margin-left: 8px; 
-  color: #666; 
-}
-
-#downloadLink { 
-  display: inline-block; 
-  margin-left: 8px; 
+  color: #00ff00;
+  font-weight: bold;
+  text-shadow: 0 0 5px #00ff00;
+  padding: 5px 10px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 5px;
 }
 
 /* MIDI Terminal */
-#terminal { 
-  background: #1e1e1e; 
-  color: #00ff00; 
-  font-family: 'Courier New', monospace; 
-  font-size: 12px; 
-  padding: 12px; 
-  height: 400px; 
-  overflow-y: auto; 
-  border: 1px solid #333; 
-  border-radius: 4px;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-
-#terminal .note-on { 
-  color: #00ff00; 
-}
-
-#terminal .note-off { 
-  color: #888; 
-}
-
-#terminal .timestamp { 
-  color: #448; 
-}
-
 .terminal-header { 
   display: flex; 
   justify-content: space-between; 
   align-items: center; 
-  margin-bottom: 8px;
+  padding: 10px 15px;
+  background: linear-gradient(90deg, rgba(138, 43, 226, 0.2) 0%, rgba(0, 255, 255, 0.1) 100%);
+  border: 2px solid rgba(138, 43, 226, 0.5);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+}
+
+.terminal-header h4 {
+  margin: 0;
+  color: #ff00ff;
+  font-size: 1.1em;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px #ff00ff;
 }
 
 .terminal-header button { 
-  padding: 4px 8px; 
-  font-size: 11px; 
+  padding: 6px 12px;
+  font-size: 0.85em;
+}
+
+#terminal { 
+  background: #0a0a0f;
+  color: #00ff00; 
+  font-family: 'Courier New', monospace; 
+  font-size: 13px; 
+  padding: 15px; 
+  height: 250px; 
+  overflow-y: auto; 
+  border: 2px solid rgba(138, 43, 226, 0.5);
+  border-top: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 0 0 10px 10px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  box-shadow: 
+    inset 0 0 30px rgba(0, 0, 0, 0.8),
+    0 0 20px rgba(138, 43, 226, 0.2);
+}
+
+#terminal .note-on { 
+  color: #00ff00;
+  text-shadow: 0 0 5px #00ff00;
+}
+
+#terminal .note-off { 
+  color: #ff00ff;
+  text-shadow: 0 0 5px #ff00ff;
+}
+
+#terminal .timestamp { 
+  color: #00ffff;
+  text-shadow: 0 0 3px #00ffff;
+}
+
+/* Scrollbar styling */
+#terminal::-webkit-scrollbar {
+  width: 10px;
+}
+
+#terminal::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+#terminal::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #ff00ff 0%, #8b00ff 100%);
+  border-radius: 5px;
+}
+
+#terminal::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #ff33ff 0%, #aa00ff 100%);
 }

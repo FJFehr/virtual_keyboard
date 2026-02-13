@@ -134,7 +134,7 @@ keyboard_html = html_content.replace(
 iframe_html = (
     '<iframe srcdoc="'
     + html.escape(keyboard_html, quote=True)
-    + '" style="width:100%;height:550px;border:0;"></iframe>'
+    + '" style="width:100%;height:750px;border:0;"></iframe>'
 )
 
 # Create Gradio interface

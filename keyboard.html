@@ -7,11 +7,15 @@
   <link rel="stylesheet" href="/file=static/styles.css" />
 </head>
 <body>
-  <h3>Virtual MIDI Keyboard (prototype)</h3>
+  <!-- Welcome Header -->
+  <div class="welcome-header">
+    <h1 class="neon-text">🎹 VIRTUAL MIDI KEYBOARD</h1>
+    <p class="subtitle">Play, record, and export your musical ideas • Two octaves • Multiple instruments • Real-time MIDI monitoring</p>
+  </div>
   
   <div id="mainContainer">
-    <!-- Left Panel: Keyboard and Controls -->
-    <div id="leftPanel">
+    <!-- Keyboard Section -->
+    <div class="keyboard-section">
       <div id="keyboard"></div>
 
       <div class="controls">
@@ -40,10 +44,10 @@
       </div>
     </div>
 
-    <!-- Right Panel: MIDI Monitor -->
-    <div id="rightPanel">
+    <!-- MIDI Monitor Section -->
+    <div class="monitor-section">
       <div class="terminal-header">
-        <h4 style="margin: 0;">MIDI Monitor</h4>
+        <h4>MIDI MONITOR</h4>
         <button id="clearTerminal">Clear</button>
       </div>
       <div id="terminal"></div>

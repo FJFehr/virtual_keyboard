@@ -182,8 +182,11 @@ function logToTerminal(message, className = '') {
 }
 
 function initTerminal() {
-  logToTerminal('=== MIDI Monitor Ready ===', 'timestamp');
-  logToTerminal('Play notes to see MIDI events...', 'timestamp');
+  logToTerminal('╔═══════════════════════════════════════════════════════╗', 'timestamp');
+  logToTerminal('║         🎹 MIDI MONITOR INITIALIZED 🎹              ║', 'timestamp');
+  logToTerminal('╚═══════════════════════════════════════════════════════╝', 'timestamp');
+  logToTerminal('Ready to capture MIDI events...', 'timestamp');
+  logToTerminal('', '');
 }
 
 // =============================================================================
@@ -198,7 +201,9 @@ function beginRecord() {
   recordBtn.disabled = true;
   stopBtn.disabled = false;
   saveBtn.disabled = true;
-  logToTerminal('\n=== RECORDING STARTED ===', 'timestamp');
+  logToTerminal('', '');
+  logToTerminal('▶▶▶ RECORDING STARTED ◀◀◀', 'timestamp');
+  logToTerminal('', '');
 }
 
 function stopRecord() {
@@ -207,7 +212,9 @@ function stopRecord() {
   recordBtn.disabled = false;
   stopBtn.disabled = true;
   saveBtn.disabled = events.length === 0;
-  logToTerminal(`=== RECORDING STOPPED (${events.length} events) ===\n`, 'timestamp');
+  logToTerminal('', '');
+  logToTerminal(`■■■ RECORDING STOPPED (${events.length} events captured) ■■■`, 'timestamp');
+  logToTerminal('', '');
 }
 
 // =============================================================================
@@ -428,7 +435,11 @@ keyboardToggle.addEventListener('change', () => {
 
 clearTerminal.addEventListener('click', () => {
   terminal.innerHTML = '';
-  logToTerminal('=== MIDI Monitor Ready ===', 'timestamp');
+  logToTerminal('╔═══════════════════════════════════════════════════════╗', 'timestamp');
+  logToTerminal('║         🎹 MIDI MONITOR INITIALIZED 🎹              ║', 'timestamp');
+  logToTerminal('╚═══════════════════════════════════════════════════════╝', 'timestamp');
+  logToTerminal('Ready to capture MIDI events...', 'timestamp');
+  logToTerminal('', '');
 });
 
 recordBtn.addEventListener('click', async () => {
