@@ -14,6 +14,31 @@ short_description: A small virtual midi keyboard
 
 Minimal browser MIDI keyboard: play in the browser, record note events, export a .mid file.
 
+## Features
+
+- 🎹 Two-octave virtual piano keyboard
+- 🎵 Multiple instrument sounds (Synth, Piano, Organ, Bass, Pluck, FM)
+- ⌨️ Computer keyboard input support  
+- 📹 MIDI event recording with timestamps
+- 💾 Export recordings as .mid files
+- 📊 Real-time MIDI event monitor
+- 🎨 Clean, responsive interface
+
+## Project Structure
+
+```
+virtual_keyboard/
+├── app.py              # Gradio server + MIDI conversion
+├── keyboard.html       # Main UI structure
+├── static/
+│   ├── styles.css      # All application styles
+│   ├── keyboard.js     # Client-side logic
+│   └── README.md       # Static assets documentation
+├── requirements.txt    # Python dependencies
+├── pyproject.toml      # Project metadata
+└── README.md           # This file
+```
+
 ## Files
 
 - app.py: Gradio app + MIDI export API

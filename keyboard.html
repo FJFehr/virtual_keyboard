@@ -1,216 +1,59 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Virtual MIDI Keyboard (Gradio Prototype)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 12px; }
-    #keyboard { display:flex; user-select:none; }
-    .key { width:42px; height:180px; border:1px solid #333; margin:0 1px; background:white; position:relative; display:flex; align-items:flex-end; justify-content:center; cursor:pointer; }
-    .key.black { width:30px; height:110px; background:#222; color:white; margin-left:-15px; margin-right:-15px; z-index:2; position:relative; }
-    .controls { margin-top:10px; display:flex; gap:8px; align-items:center; }
-    button { padding:8px 12px; }
-    #status { margin-left:8px; color:#666; }
-    #downloadLink { display:inline-block; margin-left:8px; }
-  </style>
+  <title>Virtual MIDI Keyboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/file=static/styles.css" />
 </head>
 <body>
   <h3>Virtual MIDI Keyboard (prototype)</h3>
-  <div id="keyboard"></div>
+  
+  <div id="mainContainer">
+    <!-- Left Panel: Keyboard and Controls -->
+    <div id="leftPanel">
+      <div id="keyboard"></div>
 
-  <div class="controls">
-    <button id="recordBtn">Record</button>
-    <button id="stopBtn" disabled>Stop</button>
-    <button id="saveBtn" disabled>Save MIDI</button>
-    <span id="status">Idle</span>
+      <div class="controls">
+        <label>
+          Instrument:
+          <select id="instrumentSelect">
+            <option value="synth">Synth</option>
+            <option value="piano">Piano</option>
+            <option value="organ">Organ</option>
+            <option value="bass">Bass</option>
+            <option value="pluck">Pluck</option>
+            <option value="fm">FM Synth</option>
+          </select>
+        </label>
+        
+        <button id="recordBtn">Record</button>
+        <button id="stopBtn" disabled>Stop</button>
+        <button id="saveBtn" disabled>Save MIDI</button>
+        
+        <label>
+          <input type="checkbox" id="keyboardToggle">
+          Enable Keyboard Input
+        </label>
+        
+        <span id="status">Idle</span>
+      </div>
+    </div>
+
+    <!-- Right Panel: MIDI Monitor -->
+    <div id="rightPanel">
+      <div class="terminal-header">
+        <h4 style="margin: 0;">MIDI Monitor</h4>
+        <button id="clearTerminal">Clear</button>
+      </div>
+      <div id="terminal"></div>
+    </div>
   </div>
 
+  <!-- External Dependencies -->
   <script src="https://unpkg.com/tone@next/build/Tone.js"></script>
-  <script>
-    // --- keyboard layout: C4..B4 (one octave) ---
-    const baseMidi = 60; // C4
-    // keys order with sharps flagged
-    const keys = [
-      {name:'C',  offset:0,  black:false},
-      {name:'C#', offset:1,  black:true},
-      {name:'D',  offset:2,  black:false},
-      {name:'D#', offset:3,  black:true},
-      {name:'E',  offset:4,  black:false},
-      {name:'F',  offset:5,  black:false},
-      {name:'F#', offset:6,  black:true},
-      {name:'G',  offset:7,  black:false},
-      {name:'G#', offset:8,  black:true},
-      {name:'A',  offset:9,  black:false},
-      {name:'A#', offset:10, black:true},
-      {name:'B',  offset:11, black:false}
-    ];
-
-    // build keyboard DOM
-    const keyboardEl = document.getElementById('keyboard');
-    // create white key container so black keys can overlap visually
-    for (let i=0;i<keys.length;i++){
-      const k = keys[i];
-      const keyEl = document.createElement('div');
-      keyEl.className = 'key' + (k.black? ' black': '');
-      keyEl.dataset.midi = baseMidi + k.offset;
-      keyEl.innerHTML = `<div style="padding-bottom:6px;font-size:11px">${k.name}${4}</div>`;
-      keyboardEl.appendChild(keyEl);
-    }
-
-    // Tone.js synth
-    const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-    // small envelope tweak for nicer touch
-    synth.set({options:{portamento:0}, voice: {oscillator: {type: 'sine'}}});
-
-    // recording state
-    let recording = false;
-    let startTime = 0;
-    let events = []; // {type, note, velocity, time, channel}
-
-    const statusEl = document.getElementById('status');
-    const recordBtn = document.getElementById('recordBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const saveBtn = document.getElementById('saveBtn');
-
-    function nowSec(){ return performance.now()/1000; }
-
-    function beginRecord(){
-      events = [];
-      recording = true;
-      startTime = nowSec();
-      statusEl.textContent = 'Recording...';
-      recordBtn.disabled = true;
-      stopBtn.disabled = false;
-      saveBtn.disabled = true;
-    }
-    function stopRecord(){
-      recording = false;
-      statusEl.textContent = `Recorded ${events.length} events`;
-      recordBtn.disabled = false;
-      stopBtn.disabled = true;
-      saveBtn.disabled = events.length === 0;
-    }
-
-    function noteOn(midiNote, velocity=100){
-      const freq = Tone.Frequency(midiNote, "midi").toFrequency();
-      synth.triggerAttack(freq, undefined, velocity/127);
-      if (recording) {
-        events.push({type:'note_on', note: midiNote, velocity: Math.max(1, velocity|0), time: nowSec() - startTime, channel: 0});
-      }
-    }
-    function noteOff(midiNote){
-      const freq = Tone.Frequency(midiNote, "midi").toFrequency();
-      synth.triggerRelease(freq);
-      if (recording) {
-        events.push({type:'note_off', note: midiNote, velocity: 0, time: nowSec() - startTime, channel: 0});
-      }
-    }
-
-    // attach pointer/mouse/touch events
-    keyboardEl.querySelectorAll('.key').forEach(k => {
-      let pressed = false;
-      k.addEventListener('pointerdown', (ev) => {
-        ev.preventDefault();
-        k.setPointerCapture(ev.pointerId);
-        if (!pressed){
-          pressed = true;
-          k.style.filter = 'brightness(0.85)';
-          const midi = parseInt(k.dataset.midi);
-          // velocity derived from pointer pressure if available
-          const vel = ev.pressure ? Math.round(ev.pressure * 127) : 100;
-          noteOn(midi, vel);
-        }
-      });
-      k.addEventListener('pointerup', (ev) => {
-        ev.preventDefault();
-        if (pressed){
-          pressed = false;
-          k.style.filter = '';
-          const midi = parseInt(k.dataset.midi);
-          noteOff(midi);
-        }
-      });
-      k.addEventListener('pointerleave', (ev) => {
-        // if pointer leaves while pressed, release
-        if (pressed){
-          pressed = false;
-          k.style.filter = '';
-          const midi = parseInt(k.dataset.midi);
-          noteOff(midi);
-        }
-      });
-    });
-
-    // buttons
-    recordBtn.addEventListener('click', async () => {
-      // start audio context on first user interaction (required by browsers)
-      await Tone.start();
-      beginRecord();
-    });
-
-    stopBtn.addEventListener('click', () => stopRecord());
-
-    saveBtn.addEventListener('click', async () => {
-      if (recording) stopRecord();
-      if (events.length === 0) return alert('No events recorded.');
-
-      statusEl.textContent = 'Uploading…';
-      saveBtn.disabled = true;
-      try {
-        const startResp = await fetch('/gradio_api/call/save_midi', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({data: [events]})
-        });
-        if (!startResp.ok) {
-          const txt = await startResp.text();
-          throw new Error('Server error: ' + txt);
-        }
-        const startJson = await startResp.json();
-        if (!startJson || !startJson.event_id) {
-          throw new Error('Invalid API response');
-        }
-        const resultResp = await fetch(`/gradio_api/call/save_midi/${startJson.event_id}`);
-        if (!resultResp.ok) {
-          const txt = await resultResp.text();
-          throw new Error('Server error: ' + txt);
-        }
-        const resultText = await resultResp.text();
-        const dataLine = resultText.split('\n').find(line => line.startsWith('data:'));
-        if (!dataLine) {
-          throw new Error('Invalid API response');
-        }
-        const payloadList = JSON.parse(dataLine.replace('data:', '').trim());
-        const payload = Array.isArray(payloadList) ? payloadList[0] : null;
-        if (!payload || payload.error || !payload.midi_base64) {
-          throw new Error(payload && payload.error ? payload.error : 'Invalid API response');
-        }
-        const binStr = atob(payload.midi_base64);
-        const bytes = new Uint8Array(binStr.length);
-        for (let i = 0; i < binStr.length; i++) {
-          bytes[i] = binStr.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], {type: 'audio/midi'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'recording.mid';
-        a.click();
-        statusEl.textContent = 'Downloaded .mid';
-      } catch (err){
-        console.error(err);
-        statusEl.textContent = 'Error saving MIDI';
-        alert('Error: ' + err.message);
-      } finally {
-        saveBtn.disabled = false;
-      }
-    });
-
-    // initialize button states
-    recordBtn.disabled = false;
-    stopBtn.disabled = true;
-    saveBtn.disabled = true;
-  </script>
+  
+  <!-- Application Logic -->
+  <script src="/file=static/keyboard.js"></script>
 </body>
 </html>

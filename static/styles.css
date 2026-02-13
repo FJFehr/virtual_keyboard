@@ -1,0 +1,113 @@
+/* Virtual MIDI Keyboard - Styles */
+
+/* Layout */
+body { 
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; 
+  padding: 12px; 
+}
+
+#mainContainer { 
+  display: flex; 
+  gap: 20px; 
+}
+
+#leftPanel { 
+  flex: 0 0 auto; 
+}
+
+#rightPanel { 
+  flex: 1; 
+  min-width: 300px; 
+}
+
+/* Keyboard */
+#keyboard { 
+  display: flex; 
+  user-select: none; 
+}
+
+.key { 
+  width: 42px; 
+  height: 180px; 
+  border: 1px solid #333; 
+  margin: 0 1px; 
+  background: white; 
+  position: relative; 
+  display: flex; 
+  align-items: flex-end; 
+  justify-content: center; 
+  cursor: pointer; 
+}
+
+.key.black { 
+  width: 30px; 
+  height: 110px; 
+  background: #222; 
+  color: white; 
+  margin-left: -15px; 
+  margin-right: -15px; 
+  z-index: 2; 
+  position: relative; 
+}
+
+/* Controls */
+.controls { 
+  margin-top: 10px; 
+  display: flex; 
+  gap: 8px; 
+  align-items: center; 
+  flex-wrap: wrap; 
+}
+
+button { 
+  padding: 8px 12px; 
+}
+
+#status { 
+  margin-left: 8px; 
+  color: #666; 
+}
+
+#downloadLink { 
+  display: inline-block; 
+  margin-left: 8px; 
+}
+
+/* MIDI Terminal */
+#terminal { 
+  background: #1e1e1e; 
+  color: #00ff00; 
+  font-family: 'Courier New', monospace; 
+  font-size: 12px; 
+  padding: 12px; 
+  height: 400px; 
+  overflow-y: auto; 
+  border: 1px solid #333; 
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+#terminal .note-on { 
+  color: #00ff00; 
+}
+
+#terminal .note-off { 
+  color: #888; 
+}
+
+#terminal .timestamp { 
+  color: #448; 
+}
+
+.terminal-header { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  margin-bottom: 8px;
+}
+
+.terminal-header button { 
+  padding: 4px 8px; 
+  font-size: 11px; 
+}
