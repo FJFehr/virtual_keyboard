@@ -8,6 +8,7 @@ body {
   background: linear-gradient(180deg, #0a0a0f 0%, #1a0a1f 100%);
   color: #e0e0ff;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 /* Welcome Header */
@@ -59,6 +60,7 @@ body {
 #keyboard { 
   display: flex; 
   user-select: none;
+  touch-action: none;
   padding: 20px;
   background: rgba(0, 0, 0, 0.4);
   border-radius: 15px;
@@ -79,6 +81,7 @@ body {
   align-items: flex-end; 
   justify-content: center; 
   cursor: pointer;
+  touch-action: none;
   transition: all 0.1s ease;
   box-shadow: 
     0 4px 8px rgba(0, 0, 0, 0.3),
@@ -280,4 +283,136 @@ input[type="checkbox"] {
 
 #terminal::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, #ff33ff 0%, #aa00ff 100%);
+}
+/* =============================================================================
+   RESPONSIVE DESIGN - MOBILE & TABLET
+   ============================================================================= */
+
+/* Tablet (landscape) */
+@media (max-width: 1024px) {
+  .welcome-header h1 {
+    font-size: 2em;
+  }
+  
+  .key {
+    width: 35px;
+    height: 150px;
+  }
+  
+  .key.black {
+    width: 25px;
+    height: 95px;
+    margin-left: -12px;
+    margin-right: -12px;
+  }
+}
+
+/* Mobile (portrait and small screens) */
+@media (max-width: 768px) {
+  body {
+    padding: 10px;
+  }
+  
+  .welcome-header {
+    padding: 15px;
+    margin-bottom: 15px;
+  }
+  
+  .welcome-header h1 {
+    font-size: 1.8em;
+    letter-spacing: 3px;
+  }
+  
+  #mainContainer {
+    gap: 10px;
+  }
+  
+  #keyboard {
+    padding: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .key {
+    width: 28px;
+    height: 120px;
+    font-size: 9px;
+  }
+  
+  .key.black {
+    width: 20px;
+    height: 75px;
+    margin-left: -10px;
+    margin-right: -10px;
+  }
+  
+  .key .shortcut-hint {
+    font-size: 8px;
+  }
+  
+  .controls {
+    gap: 8px;
+    padding: 10px;
+    font-size: 14px;
+  }
+  
+  button, select {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+  
+  #status {
+    font-size: 12px;
+  }
+  
+  .terminal-header h4 {
+    font-size: 14px;
+  }
+  
+  #terminal {
+    height: 150px;
+    font-size: 11px;
+  }
+}
+
+/* Very small mobile (portrait) */
+@media (max-width: 480px) {
+  .welcome-header h1 {
+    font-size: 1.5em;
+    letter-spacing: 2px;
+  }
+  
+  .key {
+    width: 22px;
+    height: 100px;
+    font-size: 8px;
+  }
+  
+  .key.black {
+    width: 16px;
+    height: 65px;
+    margin-left: -8px;
+    margin-right: -8px;
+  }
+  
+  .key .shortcut-hint {
+    font-size: 7px;
+  }
+  
+  .controls {
+    gap: 6px;
+    padding: 8px;
+    font-size: 12px;
+  }
+  
+  button, select {
+    font-size: 11px;
+    padding: 5px 8px;
+  }
+  
+  #terminal {
+    height: 120px;
+    font-size: 10px;
+  }
 }
