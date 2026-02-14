@@ -33,7 +33,7 @@ const keys = [
   {name:'B',  offset:11, black:false}
 ];
 
-// Computer keyboard mapping (C4 octave)
+// Computer keyboard mapping (fallback)
 const keyMap = {
   'a': 60,  // C4
   'w': 61,  // C#4
@@ -46,13 +46,19 @@ const keyMap = {
   'y': 68,  // G#4
   'h': 69,  // A4
   'u': 70,  // A#4
-  'j': 71   // B4
+  'j': 71,  // B4
+  'k': 72,  // C5
+  'o': 73,  // C#5
+  'l': 74,  // D5
+  'p': 75,  // D#5
+  ';': 76   // E5
 };
 
-// Keyboard shortcuts displayed on keys
+// Keyboard shortcuts displayed on keys (fallback)
 const keyShortcuts = {
   60: 'A', 61: 'W', 62: 'S', 63: 'E', 64: 'D', 65: 'F',
-  66: 'T', 67: 'G', 68: 'Y', 69: 'H', 70: 'U', 71: 'J'
+  66: 'T', 67: 'G', 68: 'Y', 69: 'H', 70: 'U', 71: 'J',
+  72: 'K', 73: 'O', 74: 'L', 75: 'P', 76: ';'
 };
 
 // =============================================================================
@@ -65,6 +71,7 @@ const recordBtn = document.getElementById('recordBtn');
 const stopBtn = document.getElementById('stopBtn');
 const playbackBtn = document.getElementById('playbackBtn');
 const saveBtn = document.getElementById('saveBtn');
+const panicBtn = document.getElementById('panicBtn');
 const keyboardToggle = document.getElementById('keyboardToggle');
 const instrumentSelect = document.getElementById('instrumentSelect');
 const engineSelect = document.getElementById('engineSelect');
@@ -142,10 +149,6 @@ async function initializeFromConfig() {
       window.keyMapFromServer[key.toLowerCase()] = parseInt(midiStr);
     }
     
-    console.log('✓ Configuration loaded from server');
-    console.log(`✓ ${Object.keys(instruments).length} instruments ready`);
-    console.log(`✓ ${Object.keys(window.keyboardShortcutsFromServer).length} keyboard shortcuts configured`);
-    
     // Render keyboard after config is loaded
     buildKeyboard();
     
@@ -154,12 +157,12 @@ async function initializeFromConfig() {
     // Fallback: Use hardcoded values for development/debugging
     console.warn('Using fallback hardcoded configuration');
     instruments = buildInstruments({
-      'synth': {name: 'Synth', type: 'Synth', oscillator: 'sine', envelope: {attack: 0.005, decay: 0.1, sustain: 0.3, release: 1}},
-      'piano': {name: 'Piano', type: 'Synth', oscillator: 'triangle', envelope: {attack: 0.001, decay: 0.2, sustain: 0.1, release: 2}},
+      'synth': {name: 'Synth', type: 'Synth', oscillator: 'sine', envelope: {attack: 0.005, decay: 0.1, sustain: 0.3, release: 0.2}},
+      'piano': {name: 'Piano', type: 'Synth', oscillator: 'triangle', envelope: {attack: 0.001, decay: 0.2, sustain: 0.1, release: 0.3}},
       'organ': {name: 'Organ', type: 'Synth', oscillator: 'sine4', envelope: {attack: 0.001, decay: 0, sustain: 1, release: 0.1}},
-      'bass': {name: 'Bass', type: 'Synth', oscillator: 'sawtooth', envelope: {attack: 0.01, decay: 0.1, sustain: 0.4, release: 1.5}},
+      'bass': {name: 'Bass', type: 'Synth', oscillator: 'sawtooth', envelope: {attack: 0.01, decay: 0.1, sustain: 0.4, release: 0.3}},
       'pluck': {name: 'Pluck', type: 'Synth', oscillator: 'triangle', envelope: {attack: 0.001, decay: 0.3, sustain: 0, release: 0.3}},
-      'fm': {name: 'FM', type: 'FMSynth', harmonicity: 3, modulationIndex: 10, envelope: {attack: 0.01, decay: 0.2, sustain: 0.2, release: 1}}
+      'fm': {name: 'FM', type: 'FMSynth', harmonicity: 3, modulationIndex: 10, envelope: {attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.2}}
     });
     window.keyboardShortcutsFromServer = keyShortcuts; // Use hardcoded as fallback
     window.keyMapFromServer = keyMap; // Use hardcoded as fallback
@@ -529,6 +532,14 @@ engineSelect.addEventListener('change', (e) => {
 playbackBtn.addEventListener('click', async () => {
   if (events.length === 0) return alert('No recording to play back');
   
+  // Ensure all notes are off before starting playback
+  if (synth) {
+    synth.releaseAll();
+  }
+  keyboardEl.querySelectorAll('.key').forEach(k => {
+    k.style.filter = '';
+  });
+  
   statusEl.textContent = 'Playing back...';
   playbackBtn.disabled = true;
   recordBtn.disabled = true;
@@ -538,11 +549,47 @@ playbackBtn.addEventListener('click', async () => {
   logToTerminal('', '');
   
   try {
-    // For now, skip engine processing and directly play recorded events
-    // TODO: Call engine API when Gradio routing is figured out
-    const processedEvents = events;
+    // Process events through the selected engine
+    let processedEvents = events;
+    const selectedEngine = engineSelect.value;
     
-    console.log(`Playing back ${processedEvents.length} events`);
+    if (selectedEngine && selectedEngine !== 'parrot') {
+      // Step 1: Start the engine processing call
+      const startResp = await fetch('/gradio_api/call/process_engine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: [{
+            engine_id: selectedEngine,
+            events: events
+          }]
+        })
+      });
+      
+      if (!startResp.ok) {
+        console.error('Engine API start failed:', startResp.status);
+      } else {
+        const startJson = await startResp.json();
+
+        
+        // Step 2: Poll for the result
+        if (startJson && startJson.event_id) {
+          const resultResp = await fetch(`/gradio_api/call/process_engine/${startJson.event_id}`);
+          if (resultResp.ok) {
+            const resultText = await resultResp.text();
+            const dataLine = resultText.split('\n').find(line => line.startsWith('data:'));
+            if (dataLine) {
+              const payloadList = JSON.parse(dataLine.replace('data:', '').trim());
+              const result = Array.isArray(payloadList) ? payloadList[0] : null;
+              
+              if (result && result.events) {
+                processedEvents = result.events;
+              }
+            }
+          }
+        }
+      }
+    }
     
     // Play back the recorded events
     statusEl.textContent = 'Playing back...';
@@ -550,7 +597,16 @@ playbackBtn.addEventListener('click', async () => {
     
     const playEvent = () => {
       if (eventIndex >= processedEvents.length) {
-        // Playback complete
+        // Playback complete - ensure all notes are off
+        if (synth) {
+          synth.releaseAll();
+        }
+        
+        // Clear all key highlights
+        keyboardEl.querySelectorAll('.key').forEach(k => {
+          k.style.filter = '';
+        });
+        
         statusEl.textContent = 'Playback complete';
         playbackBtn.disabled = false;
         recordBtn.disabled = false;
@@ -605,10 +661,35 @@ playbackBtn.addEventListener('click', async () => {
     statusEl.textContent = 'Playback error: ' + err.message;
     playbackBtn.disabled = false;
     recordBtn.disabled = false;
+    
+    // Ensure all notes are off on error
+    if (synth) {
+      synth.releaseAll();
+    }
+    keyboardEl.querySelectorAll('.key').forEach(k => {
+      k.style.filter = '';
+    });
   }
 });
 
 saveBtn.addEventListener('click', () => saveMIDI());
+
+panicBtn.addEventListener('click', () => {
+  // Stop all notes immediately
+  if (synth) {
+    synth.releaseAll();
+  }
+  
+  // Clear all pressed keys
+  pressedKeys.clear();
+  
+  // Reset all visual key highlights
+  keyboardEl.querySelectorAll('.key').forEach(k => {
+    k.style.filter = '';
+  });
+  
+  logToTerminal('🚨 PANIC - All notes stopped', 'timestamp');
+});
 
 // =============================================================================
 // =============================================================================
@@ -631,8 +712,6 @@ async function init() {
   stopBtn.disabled = true;
   saveBtn.disabled = true;
   playbackBtn.disabled = true;
-  
-  console.log('✓ Virtual MIDI Keyboard initialized');
 }
 
 // Start the application when DOM is ready

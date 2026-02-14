@@ -65,6 +65,67 @@ class ParrotEngine(MIDIEngine):
 
 
 # =============================================================================
+# REVERSE PARROT ENGINE
+# =============================================================================
+
+
+class ReverseParrotEngine(MIDIEngine):
+    """
+    Reverse Parrot Engine - plays back MIDI in reverse order.
+
+    Takes the recorded performance and reverses the sequence of notes,
+    playing them backwards while maintaining their timing relationships.
+    """
+
+    def __init__(self):
+        super().__init__("Reverse Parrot")
+
+    def process(self, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Reverse the sequence of note numbers while keeping timing and event types"""
+        if not events:
+            return []
+
+        # Separate note_on and note_off events
+        note_on_events = [e for e in events if e.get("type") == "note_on"]
+        note_off_events = [e for e in events if e.get("type") == "note_off"]
+        
+        # Extract note numbers from note_on events and reverse them
+        on_notes = [e.get("note") for e in note_on_events]
+        reversed_on_notes = list(reversed(on_notes))
+        
+        # Extract note numbers from note_off events and reverse them
+        off_notes = [e.get("note") for e in note_off_events]
+        reversed_off_notes = list(reversed(off_notes))
+        
+        # Reconstruct events with reversed notes but original structure
+        result = []
+        on_index = 0
+        off_index = 0
+        
+        for event in events:
+            if event.get("type") == "note_on":
+                result.append({
+                    "type": "note_on",
+                    "note": reversed_on_notes[on_index],
+                    "velocity": event.get("velocity"),
+                    "time": event.get("time"),
+                    "channel": event.get("channel", 0),
+                })
+                on_index += 1
+            elif event.get("type") == "note_off":
+                result.append({
+                    "type": "note_off",
+                    "note": reversed_off_notes[off_index],
+                    "velocity": event.get("velocity"),
+                    "time": event.get("time"),
+                    "channel": event.get("channel", 0),
+                })
+                off_index += 1
+
+        return result
+
+
+# =============================================================================
 # ENGINE REGISTRY
 # =============================================================================
 
@@ -72,7 +133,7 @@ class ParrotEngine(MIDIEngine):
 class EngineRegistry:
     """Registry for managing available MIDI engines"""
 
-    _engines = {"parrot": ParrotEngine}
+    _engines = {"parrot": ParrotEngine, "reverse_parrot": ReverseParrotEngine}
 
     @classmethod
     def register(cls, engine_id: str, engine_class: type):

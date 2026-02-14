@@ -43,6 +43,7 @@ KEYBOARD_KEYS = [
 
 # Computer keyboard shortcuts to MIDI notes
 KEYBOARD_SHORTCUTS = {
+    # First octave (C4-B4)
     60: "A",  # C4
     61: "W",  # C#4
     62: "S",  # D4
@@ -55,6 +56,12 @@ KEYBOARD_SHORTCUTS = {
     69: "H",  # A4
     70: "U",  # A#4
     71: "J",  # B4
+    # Second octave (C5-E5)
+    72: "K",  # C5
+    73: "O",  # C#5
+    74: "L",  # D5
+    75: "P",  # D#5
+    76: ";",  # E5
 }
 
 # =============================================================================
@@ -80,7 +87,7 @@ INSTRUMENTS = {
             "attack": 0.005,
             "decay": 0.1,
             "sustain": 0.3,
-            "release": 1,
+            "release": 0.2,
         },
     },
     "piano": {
@@ -91,7 +98,7 @@ INSTRUMENTS = {
             "attack": 0.001,
             "decay": 0.2,
             "sustain": 0.1,
-            "release": 2,
+            "release": 0.3,
         },
     },
     "organ": {
@@ -113,7 +120,7 @@ INSTRUMENTS = {
             "attack": 0.01,
             "decay": 0.1,
             "sustain": 0.4,
-            "release": 1.5,
+            "release": 0.3,
         },
     },
     "pluck": {
@@ -136,7 +143,7 @@ INSTRUMENTS = {
             "attack": 0.01,
             "decay": 0.2,
             "sustain": 0.2,
-            "release": 1,
+            "release": 0.2,
         },
     },
 }
