@@ -31,8 +31,16 @@
           </select>
         </label>
         
+        <label>
+          Engine:
+          <select id="engineSelect">
+            <option value="parrot">Parrot</option>
+          </select>
+        </label>
+        
         <button id="recordBtn">Record</button>
         <button id="stopBtn" disabled>Stop</button>
+        <button id="playbackBtn" disabled>Playback</button>
         <button id="saveBtn" disabled>Save MIDI</button>
         
         <label>
@@ -56,6 +64,9 @@
 
   <!-- External Dependencies -->
   <script src="https://unpkg.com/tone@next/build/Tone.js"></script>
+  
+  <!-- Engine -->
+  <script src="/file=static/engine.js"></script>
   
   <!-- Application Logic -->
   <script src="/file=static/keyboard.js"></script>

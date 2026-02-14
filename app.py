@@ -4,25 +4,30 @@ Virtual MIDI Keyboard - Gradio Application
 This application provides a browser-based MIDI keyboard that can:
 - Play notes with various synthesizer sounds (Tone.js)
 - Record MIDI events with timestamps
+- Process recordings through various engines
 - Export recordings as .mid files
 - Support computer keyboard input
 - Monitor MIDI events in real-time
 
 File Structure:
 - app.py: Gradio server and MIDI conversion (this file)
+- engines.py: MIDI processing engines
 - keyboard.html: Main UI structure
 - static/styles.css: All application styles
 - static/keyboard.js: Client-side logic and interactivity
+- static/engine.js: Client-side engine abstraction
 """
 
 import base64
 import html
 import io
+import json
 
 import mido
 from mido import MidiFile, MidiTrack, Message, MetaMessage
 
 import gradio as gr
+from engines import EngineRegistry, ParrotEngine
 
 
 # =============================================================================
@@ -110,6 +115,94 @@ def save_midi_api(events):
 
 
 # =============================================================================
+# ENGINE API ENDPOINTS
+# =============================================================================
+
+
+def list_engines():
+    """
+    API endpoint to list available MIDI engines
+
+    Returns:
+        List of engine info dictionaries
+    """
+    engines = EngineRegistry.list_engines()
+    return {"engines": [EngineRegistry.get_engine_info(e) for e in engines]}
+
+
+def process_with_engine(engine_id: str, events: list):
+    """
+    API endpoint to process MIDI events through an engine
+
+    Args:
+        engine_id: The engine to use (e.g. 'parrot')
+        events: List of MIDI event dictionaries
+
+    Returns:
+        Processed events or error message
+    """
+    if not engine_id or not events:
+        return {"error": "Missing engine_id or events"}
+
+    try:
+        engine = EngineRegistry.get_engine(engine_id)
+        processed = engine.process(events)
+        return {"success": True, "events": processed}
+    except ValueError as e:
+        return {"error": str(e)}
+    except Exception as e:
+        return {"error": f"Processing error: {str(e)}"}
+
+
+def process_engine_api(payload: dict):
+    """
+    Wrapper API endpoint that accepts JSON payload
+
+    Args:
+        payload: Dict with 'engine_id' and 'events' keys
+
+    Returns:
+        Processed events or error message
+    """
+    try:
+        print(f"[DEBUG] process_engine_api called with payload type: {type(payload)}")
+        print(
+            f"[DEBUG] payload keys: {payload.keys() if isinstance(payload, dict) else 'N/A'}"
+        )
+
+        # Handle both direct dict and wrapped dict formats
+        data = payload
+        if isinstance(payload, dict) and "data" in payload:
+            # If wrapped in a data field, unwrap it
+            data = payload["data"]
+            if isinstance(data, list) and len(data) > 0:
+                data = data[0]
+
+        print(
+            f"[DEBUG] extracted data type: {type(data)}, has engine_id: {'engine_id' in data if isinstance(data, dict) else False}"
+        )
+
+        engine_id = data.get("engine_id") if isinstance(data, dict) else None
+        events = data.get("events", []) if isinstance(data, dict) else []
+
+        print(
+            f"[DEBUG] engine_id: {engine_id}, events count: {len(events) if isinstance(events, list) else 'N/A'}"
+        )
+
+        result = process_with_engine(engine_id, events)
+        print(
+            f"[DEBUG] process_engine_api returning: {result.keys() if isinstance(result, dict) else type(result)}"
+        )
+        return result
+    except Exception as e:
+        print(f"[DEBUG] Exception in process_engine_api: {str(e)}")
+        import traceback
+
+        traceback.print_exc()
+        return {"error": f"API error: {str(e)}"}
+
+
+# =============================================================================
 # GRADIO APPLICATION
 # =============================================================================
 
@@ -138,19 +231,37 @@ iframe_html = (
 )
 
 # Create Gradio interface
-with gr.Blocks() as demo:
+with gr.Blocks(title="Virtual MIDI Keyboard") as demo:
     gr.HTML(iframe_html)
 
-    # Hidden API endpoint components (required for Gradio 6.x)
-    with gr.Row(visible=False):
-        api_input = gr.JSON()
-        api_output = gr.JSON()
-        api_btn = gr.Button("save")
+    # Hidden API endpoints using Gradio's function API
+    with gr.Group(visible=False) as api_group:
+        # Process engine endpoint
+        engine_input = gr.Textbox(label="engine_payload")
+        engine_output = gr.Textbox(label="engine_result")
 
-    # Connect API endpoint
-    api_btn.click(
-        fn=save_midi_api, inputs=api_input, outputs=api_output, api_name="save_midi"
-    )
+        def call_engine_api(payload_json):
+            """Wrapper to call engine API with JSON input"""
+            import json
+
+            try:
+                payload = (
+                    json.loads(payload_json)
+                    if isinstance(payload_json, str)
+                    else payload_json
+                )
+                result = process_engine_api(payload)
+                return json.dumps(result)
+            except Exception as e:
+                return json.dumps({"error": str(e)})
+
+        engine_btn = gr.Button("process_engine", visible=False)
+        engine_btn.click(
+            fn=call_engine_api,
+            inputs=engine_input,
+            outputs=engine_output,
+            api_name="process_engine",
+        )
 
 
 # =============================================================================

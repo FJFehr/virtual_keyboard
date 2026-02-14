@@ -63,9 +63,11 @@ const keyboardEl = document.getElementById('keyboard');
 const statusEl = document.getElementById('status');
 const recordBtn = document.getElementById('recordBtn');
 const stopBtn = document.getElementById('stopBtn');
+const playbackBtn = document.getElementById('playbackBtn');
 const saveBtn = document.getElementById('saveBtn');
 const keyboardToggle = document.getElementById('keyboardToggle');
 const instrumentSelect = document.getElementById('instrumentSelect');
+const engineSelect = document.getElementById('engineSelect');
 const terminal = document.getElementById('terminal');
 const clearTerminal = document.getElementById('clearTerminal');
 
@@ -78,6 +80,7 @@ let recording = false;
 let startTime = 0;
 let events = [];
 const pressedKeys = new Set();
+let selectedEngine = 'parrot'; // Default engine
 
 // =============================================================================
 // INSTRUMENT CONFIGURATIONS
@@ -206,7 +209,12 @@ function beginRecord() {
   statusEl.textContent = 'Recording...';
   recordBtn.disabled = true;
   stopBtn.disabled = false;
+  playbackBtn.disabled = true;
   saveBtn.disabled = true;
+  
+  // Start engine recording
+  const recordingId = midiEngine.startRecording('keyboard_' + Date.now());
+  
   logToTerminal('', '');
   logToTerminal('▶▶▶ RECORDING STARTED ◀◀◀', 'timestamp');
   logToTerminal('', '');
@@ -218,6 +226,11 @@ function stopRecord() {
   recordBtn.disabled = false;
   stopBtn.disabled = true;
   saveBtn.disabled = events.length === 0;
+  playbackBtn.disabled = events.length === 0;
+  
+  // Stop engine recording
+  midiEngine.stopRecording();
+  
   logToTerminal('', '');
   logToTerminal(`■■■ RECORDING STOPPED (${events.length} events captured) ■■■`, 'timestamp');
   logToTerminal('', '');
@@ -239,13 +252,16 @@ function noteOn(midiNote, velocity = 100) {
   );
   
   if (recording) {
-    events.push({
+    const event = {
       type: 'note_on',
       note: midiNote,
       velocity: Math.max(1, velocity | 0),
       time: nowSec() - startTime,
       channel: 0
-    });
+    };
+    events.push(event);
+    // Also add to engine
+    midiEngine.addEvent(event);
   }
 }
 
@@ -261,13 +277,16 @@ function noteOff(midiNote) {
   );
   
   if (recording) {
-    events.push({
+    const event = {
       type: 'note_off',
       note: midiNote,
       velocity: 0,
       time: nowSec() - startTime,
       channel: 0
-    });
+    };
+    events.push(event);
+    // Also add to engine
+    midiEngine.addEvent(event);
   }
 }
 
@@ -460,6 +479,93 @@ recordBtn.addEventListener('click', async () => {
 
 stopBtn.addEventListener('click', () => stopRecord());
 
+engineSelect.addEventListener('change', (e) => {
+  selectedEngine = e.target.value;
+  logToTerminal(`Engine switched to: ${selectedEngine}`, 'timestamp');
+});
+
+playbackBtn.addEventListener('click', async () => {
+  if (events.length === 0) return alert('No recording to play back');
+  
+  statusEl.textContent = 'Playing back...';
+  playbackBtn.disabled = true;
+  recordBtn.disabled = true;
+  
+  logToTerminal('', '');
+  logToTerminal('♫♫♫ PLAYBACK STARTED ♫♫♫', 'timestamp');
+  logToTerminal('', '');
+  
+  try {
+    // For now, skip engine processing and directly play recorded events
+    // TODO: Call engine API when Gradio routing is figured out
+    const processedEvents = events;
+    
+    console.log(`Playing back ${processedEvents.length} events`);
+    
+    // Play back the recorded events
+    statusEl.textContent = 'Playing back...';
+    let eventIndex = 0;
+    
+    const playEvent = () => {
+      if (eventIndex >= processedEvents.length) {
+        // Playback complete
+        statusEl.textContent = 'Playback complete';
+        playbackBtn.disabled = false;
+        recordBtn.disabled = false;
+        
+        logToTerminal('', '');
+        logToTerminal('♫♫♫ PLAYBACK FINISHED ♫♫♫', 'timestamp');
+        logToTerminal('', '');
+        return;
+      }
+      
+      const event = processedEvents[eventIndex];
+      const nextTime = eventIndex + 1 < processedEvents.length
+        ? processedEvents[eventIndex + 1].time
+        : event.time;
+      
+      if (event.type === 'note_on') {
+        const freq = Tone.Frequency(event.note, "midi").toFrequency();
+        synth.triggerAttack(freq, undefined, event.velocity / 127);
+        
+        const noteName = midiToNoteName(event.note);
+        logToTerminal(
+          `[${event.time.toFixed(3)}s] ► ${noteName} (${event.note})`,
+          'note-on'
+        );
+        
+        // Highlight the key being played
+        const keyEl = getKeyElement(event.note);
+        if (keyEl) keyEl.style.filter = 'brightness(0.7)';
+      } else if (event.type === 'note_off') {
+        const freq = Tone.Frequency(event.note, "midi").toFrequency();
+        synth.triggerRelease(freq);
+        
+        const noteName = midiToNoteName(event.note);
+        logToTerminal(
+          `[${event.time.toFixed(3)}s] ◄ ${noteName}`,
+          'note-off'
+        );
+        
+        // Remove key highlight
+        const keyEl = getKeyElement(event.note);
+        if (keyEl) keyEl.style.filter = '';
+      }
+      
+      eventIndex++;
+      const deltaTime = Math.max(0, nextTime - event.time);
+      setTimeout(playEvent, deltaTime * 1000);
+    };
+    
+    playEvent();
+  } catch (err) {
+    console.error('Playback error:', err);
+    statusEl.textContent = 'Playback error: ' + err.message;
+    playbackBtn.disabled = false;
+    recordBtn.disabled = false;
+  }
+});
+
 saveBtn.addEventListener('click', () => saveMIDI());
 
 // =============================================================================
@@ -476,6 +582,7 @@ function init() {
   recordBtn.disabled = false;
   stopBtn.disabled = true;
   saveBtn.disabled = true;
+  playbackBtn.disabled = true;
 }
 
 // Start the application
