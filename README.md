@@ -2,7 +2,7 @@
 title: SYNTHIA
 emoji: 🎹
 colorFrom: purple
-colorTo: cyan
+colorTo: blue
 sdk: gradio
 sdk_version: 6.5.1
 app_file: app.py
