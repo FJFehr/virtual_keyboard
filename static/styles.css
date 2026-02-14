@@ -32,14 +32,6 @@ body {
   letter-spacing: 2px;
 }
 
-.subtitle {
-  font-size: 1em;
-  color: #00ffff;
-  margin: 0;
-  text-shadow: 0 0 5px #00ffff;
-  opacity: 0.9;
-}
-
 #mainContainer { 
   display: flex;
   flex-direction: column;

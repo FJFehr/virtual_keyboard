@@ -81,50 +81,91 @@ let startTime = 0;
 let events = [];
 const pressedKeys = new Set();
 let selectedEngine = 'parrot'; // Default engine
+let serverConfig = null; // Will hold instruments and keyboard config from server
 
 // =============================================================================
-// INSTRUMENT CONFIGURATIONS
+// INSTRUMENT FACTORY
 // =============================================================================
 
-const instruments = {
-  synth: () => new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 24,
-    oscillator: { type: 'sine' },
-    envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
-  }).toDestination(),
+function buildInstruments(instrumentConfigs) {
+  /**
+   * Build Tone.js synth instances from config
+   * instrumentConfigs: Object from server with instrument definitions
+   */
+  const instruments = {};
   
-  piano: () => new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 24,
-    oscillator: { type: 'triangle' },
-    envelope: { attack: 0.001, decay: 0.2, sustain: 0.1, release: 2 }
-  }).toDestination(),
+  for (const [key, config] of Object.entries(instrumentConfigs)) {
+    const baseOptions = {
+      maxPolyphony: 24,
+      oscillator: config.oscillator ? { type: config.oscillator } : undefined,
+      envelope: config.envelope,
+    };
+    
+    // Remove undefined keys
+    Object.keys(baseOptions).forEach(k => baseOptions[k] === undefined && delete baseOptions[k]);
+    
+    if (config.type === 'FMSynth') {
+      baseOptions.harmonicity = config.harmonicity;
+      baseOptions.modulationIndex = config.modulationIndex;
+      instruments[key] = () => new Tone.PolySynth(Tone.FMSynth, baseOptions).toDestination();
+    } else {
+      instruments[key] = () => new Tone.PolySynth(Tone.Synth, baseOptions).toDestination();
+    }
+  }
   
-  organ: () => new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 24,
-    oscillator: { type: 'sine4' },
-    envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.1 }
-  }).toDestination(),
-  
-  bass: () => new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 24,
-    oscillator: { type: 'sawtooth' },
-    envelope: { attack: 0.01, decay: 0.1, sustain: 0.4, release: 1.5 },
-    filter: { Q: 2, type: 'lowpass', rolloff: -12 }
-  }).toDestination(),
-  
-  pluck: () => new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 24,
-    oscillator: { type: 'triangle' },
-    envelope: { attack: 0.001, decay: 0.3, sustain: 0, release: 0.3 }
-  }).toDestination(),
-  
-  fm: () => new Tone.PolySynth(Tone.FMSynth, {
-    maxPolyphony: 24,
-    harmonicity: 3,
-    modulationIndex: 10,
-    envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 1 }
-  }).toDestination()
-};
+  return instruments;
+}
+
+let instruments = {}; // Will be populated after config is fetched
+
+// =============================================================================
+// INITIALIZATION FROM SERVER CONFIG
+// =============================================================================
+
+async function initializeFromConfig() {
+  /**
+   * Fetch configuration from Python server and initialize UI
+   */
+  try {
+    const response = await fetch('/gradio_api/api/config');
+    if (!response.ok) throw new Error(`Config fetch failed: ${response.status}`);
+    
+    serverConfig = await response.json();
+    
+    // Build instruments from config
+    instruments = buildInstruments(serverConfig.instruments);
+    
+    // Build keyboard shortcut maps from server config
+    window.keyboardShortcutsFromServer = serverConfig.keyboard_shortcuts;
+    window.keyMapFromServer = {};
+    for (const [midiStr, key] of Object.entries(serverConfig.keyboard_shortcuts)) {
+      window.keyMapFromServer[key.toLowerCase()] = parseInt(midiStr);
+    }
+    
+    console.log('✓ Configuration loaded from server');
+    console.log(`✓ ${Object.keys(instruments).length} instruments ready`);
+    console.log(`✓ ${Object.keys(window.keyboardShortcutsFromServer).length} keyboard shortcuts configured`);
+    
+    // Render keyboard after config is loaded
+    buildKeyboard();
+    
+  } catch (error) {
+    console.error('Failed to load configuration:', error);
+    // Fallback: Use hardcoded values for development/debugging
+    console.warn('Using fallback hardcoded configuration');
+    instruments = buildInstruments({
+      'synth': {name: 'Synth', type: 'Synth', oscillator: 'sine', envelope: {attack: 0.005, decay: 0.1, sustain: 0.3, release: 1}},
+      'piano': {name: 'Piano', type: 'Synth', oscillator: 'triangle', envelope: {attack: 0.001, decay: 0.2, sustain: 0.1, release: 2}},
+      'organ': {name: 'Organ', type: 'Synth', oscillator: 'sine4', envelope: {attack: 0.001, decay: 0, sustain: 1, release: 0.1}},
+      'bass': {name: 'Bass', type: 'Synth', oscillator: 'sawtooth', envelope: {attack: 0.01, decay: 0.1, sustain: 0.4, release: 1.5}},
+      'pluck': {name: 'Pluck', type: 'Synth', oscillator: 'triangle', envelope: {attack: 0.001, decay: 0.3, sustain: 0, release: 0.3}},
+      'fm': {name: 'FM', type: 'FMSynth', harmonicity: 3, modulationIndex: 10, envelope: {attack: 0.01, decay: 0.2, sustain: 0.2, release: 1}}
+    });
+    window.keyboardShortcutsFromServer = keyShortcuts; // Use hardcoded as fallback
+    window.keyMapFromServer = keyMap; // Use hardcoded as fallback
+    buildKeyboard();
+  }
+}
 
 function loadInstrument(type) {
   if (synth) {
@@ -139,6 +180,9 @@ function loadInstrument(type) {
 // =============================================================================
 
 function buildKeyboard() {
+  // Clear any existing keys
+  keyboardEl.innerHTML = '';
+  
   for (let octave = 0; octave < numOctaves; octave++) {
     for (let i = 0; i < keys.length; i++) {
       const k = keys[i];
@@ -148,7 +192,9 @@ function buildKeyboard() {
       keyEl.className = 'key' + (k.black ? ' black' : '');
       keyEl.dataset.midi = midiNote;
       
-      const shortcut = keyShortcuts[midiNote] || '';
+      // Use server config shortcuts if available, otherwise fallback to hardcoded
+      const shortcutsMap = window.keyboardShortcutsFromServer || keyShortcuts;
+      const shortcut = shortcutsMap[midiNote] || '';
       const shortcutHtml = shortcut ? `<div class="shortcut-hint">${shortcut}</div>` : '';
       keyEl.innerHTML = `<div style="padding-bottom:6px;font-size:11px">${shortcutHtml}${k.name}${octaveNum}</div>`;
       
@@ -212,9 +258,6 @@ function beginRecord() {
   playbackBtn.disabled = true;
   saveBtn.disabled = true;
   
-  // Start engine recording
-  const recordingId = midiEngine.startRecording('keyboard_' + Date.now());
-  
   logToTerminal('', '');
   logToTerminal('▶▶▶ RECORDING STARTED ◀◀◀', 'timestamp');
   logToTerminal('', '');
@@ -227,9 +270,6 @@ function stopRecord() {
   stopBtn.disabled = true;
   saveBtn.disabled = events.length === 0;
   playbackBtn.disabled = events.length === 0;
-  
-  // Stop engine recording
-  midiEngine.stopRecording();
   
   logToTerminal('', '');
   logToTerminal(`■■■ RECORDING STOPPED (${events.length} events captured) ■■■`, 'timestamp');
@@ -260,8 +300,6 @@ function noteOn(midiNote, velocity = 100) {
       channel: 0
     };
     events.push(event);
-    // Also add to engine
-    midiEngine.addEvent(event);
   }
 }
 
@@ -285,8 +323,6 @@ function noteOff(midiNote) {
       channel: 0
     };
     events.push(event);
-    // Also add to engine
-    midiEngine.addEvent(event);
   }
 }
 
@@ -301,6 +337,7 @@ function getKeyElement(midiNote) {
 document.addEventListener('keydown', async (ev) => {
   if (!keyboardToggle.checked) return;
   const key = ev.key.toLowerCase();
+  const keyMap = window.keyMapFromServer || keyMap; // Use server config if available, fallback to hardcoded
   if (!keyMap[key] || pressedKeys.has(key)) return;
   
   ev.preventDefault();
@@ -317,6 +354,7 @@ document.addEventListener('keydown', async (ev) => {
 document.addEventListener('keyup', (ev) => {
   if (!keyboardToggle.checked) return;
   const key = ev.key.toLowerCase();
+  const keyMap = window.keyMapFromServer || keyMap; // Use server config if available, fallback to hardcoded
   if (!keyMap[key] || !pressedKeys.has(key)) return;
   
   ev.preventDefault();
@@ -336,12 +374,16 @@ function attachPointerEvents() {
   keyboardEl.querySelectorAll('.key').forEach(k => {
     let pressed = false;
     
-    k.addEventListener('pointerdown', (ev) => {
+    k.addEventListener('pointerdown', async (ev) => {
       ev.preventDefault();
       k.setPointerCapture(ev.pointerId);
       if (!pressed) {
         pressed = true;
         k.style.filter = 'brightness(0.85)';
+        
+        // Ensure Tone.js audio context is started
+        await Tone.start();
+        
         const midi = parseInt(k.dataset.midi);
         const vel = ev.pressure ? Math.round(ev.pressure * 127) : 100;
         noteOn(midi, vel);
@@ -569,12 +611,18 @@ playbackBtn.addEventListener('click', async () => {
 saveBtn.addEventListener('click', () => saveMIDI());
 
 // =============================================================================
+// =============================================================================
 // INITIALIZATION
 // =============================================================================
 
-function init() {
+async function init() {
+  // First, load configuration from server
+  await initializeFromConfig();
+  
+  // Then load default instrument (synth)
   loadInstrument('synth');
-  buildKeyboard();
+  
+  // Setup keyboard event listeners and UI
   attachPointerEvents();
   initTerminal();
   
@@ -583,7 +631,9 @@ function init() {
   stopBtn.disabled = true;
   saveBtn.disabled = true;
   playbackBtn.disabled = true;
+  
+  console.log('✓ Virtual MIDI Keyboard initialized');
 }
 
-// Start the application
-init();
+// Start the application when DOM is ready
+document.addEventListener('DOMContentLoaded', init);
