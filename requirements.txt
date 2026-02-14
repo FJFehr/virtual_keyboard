@@ -1,2 +1,6 @@
 gradio
 mido
+torch
+huggingface_hub
+einops>=0.6
+einx

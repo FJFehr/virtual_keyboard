@@ -14,6 +14,9 @@ short_description: Browser-based MIDI keyboard with recording and synthesis
 
 A minimal, responsive browser-based MIDI keyboard. Play live, record performances, and export as MIDI files. 🎹
 
+This build includes a **Godzilla** engine that can continue a short phrase using the
+Godzilla Piano Transformer.
+
 
 ## 🗂️ Project Structure
 
@@ -22,6 +25,7 @@ A minimal, responsive browser-based MIDI keyboard. Play live, record performance
 ├── app.py                  # Gradio server & API endpoints
 ├── config.py               # Centralized configuration
 ├── engines.py              # MIDI processing engines
+├── midi_model.py           # Godzilla model integration
 ├── midi.py                 # MIDI file utilities
 ├── keyboard.html           # HTML structure
 ├── static/
@@ -43,6 +47,13 @@ uv run python app.py
 
 Open **http://127.0.0.1:7861**
 
+## 🎹 Godzilla Engine
+
+Select **Godzilla** in the engine dropdown to generate a short continuation from your
+recorded phrase. The model is downloaded on first use and cached locally.
+
+Note: the engine filters generated notes to your on-screen keyboard range.
+
 ## 🌐 Deploy to Hugging Face Spaces
 
 ```bash
@@ -55,6 +66,7 @@ git push hf main
 - **Frontend**: Tone.js v6+ (Web Audio API)
 - **Backend**: Gradio 6.x + Python 3.10+
 - **MIDI**: mido library
+- **Model**: Godzilla Piano Transformer (via Hugging Face)
 
 ## 📝 License
 

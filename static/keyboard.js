@@ -125,6 +125,23 @@ function buildInstruments(instrumentConfigs) {
 
 let instruments = {}; // Will be populated after config is fetched
 
+function populateEngineSelect(engines) {
+  if (!engineSelect || !Array.isArray(engines)) return;
+
+  engineSelect.innerHTML = '';
+  engines.forEach(engine => {
+    const option = document.createElement('option');
+    option.value = engine.id;
+    option.textContent = engine.name || engine.id;
+    engineSelect.appendChild(option);
+  });
+
+  if (engines.length > 0) {
+    selectedEngine = engines[0].id;
+    engineSelect.value = selectedEngine;
+  }
+}
+
 // =============================================================================
 // INITIALIZATION FROM SERVER CONFIG
 // =============================================================================
@@ -148,6 +165,9 @@ async function initializeFromConfig() {
     for (const [midiStr, key] of Object.entries(serverConfig.keyboard_shortcuts)) {
       window.keyMapFromServer[key.toLowerCase()] = parseInt(midiStr);
     }
+
+    // Populate engine dropdown from server config
+    populateEngineSelect(serverConfig.engines);
     
     // Render keyboard after config is loaded
     buildKeyboard();
@@ -166,6 +186,11 @@ async function initializeFromConfig() {
     });
     window.keyboardShortcutsFromServer = keyShortcuts; // Use hardcoded as fallback
     window.keyMapFromServer = keyMap; // Use hardcoded as fallback
+    populateEngineSelect([
+      { id: 'parrot', name: 'Parrot' },
+      { id: 'reverse_parrot', name: 'Reverse Parrot' },
+      { id: 'godzilla_continue', name: 'Godzilla' }
+    ]);
     buildKeyboard();
   }
 }

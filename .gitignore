@@ -26,6 +26,12 @@ share/python-wheels/
 .installed.cfg
 *.egg
 
+# External model dependencies
+external/
+
+# Output files
+output/
+
 # Virtual environments
 .venv/
 venv/

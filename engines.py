@@ -4,33 +4,13 @@ Virtual MIDI Keyboard - Engines
 MIDI processing engines that transform, analyze, or manipulate MIDI events.
 """
 
-from abc import ABC, abstractmethod
 from typing import List, Dict, Any
 
-
-# =============================================================================
-# BASE ENGINE CLASS
-# =============================================================================
-
-
-class MIDIEngine(ABC):
-    """Abstract base class for MIDI engines"""
-
-    def __init__(self, name: str):
-        self.name = name
-
-    @abstractmethod
-    def process(self, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Process MIDI events and return transformed events.
-
-        Args:
-            events: List of MIDI event dictionaries
-
-        Returns:
-            List of processed MIDI event dictionaries
-        """
-        pass
+from midi_model import (
+    count_out_of_range_events,
+    filter_events_to_keyboard_range,
+    get_model,
+)
 
 
 # =============================================================================
@@ -38,7 +18,7 @@ class MIDIEngine(ABC):
 # =============================================================================
 
 
-class ParrotEngine(MIDIEngine):
+class ParrotEngine:
     """
     Parrot Engine - plays back MIDI exactly as recorded.
 
@@ -46,7 +26,7 @@ class ParrotEngine(MIDIEngine):
     """
 
     def __init__(self):
-        super().__init__("Parrot")
+        self.name = "Parrot"
 
     def process(self, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Return events unchanged"""
@@ -69,7 +49,7 @@ class ParrotEngine(MIDIEngine):
 # =============================================================================
 
 
-class ReverseParrotEngine(MIDIEngine):
+class ReverseParrotEngine:
     """
     Reverse Parrot Engine - plays back MIDI in reverse order.
 
@@ -78,7 +58,7 @@ class ReverseParrotEngine(MIDIEngine):
     """
 
     def __init__(self):
-        super().__init__("Reverse Parrot")
+        self.name = "Reverse Parrot"
 
     def process(self, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Reverse the sequence of note numbers while keeping timing and event types"""
@@ -88,41 +68,77 @@ class ReverseParrotEngine(MIDIEngine):
         # Separate note_on and note_off events
         note_on_events = [e for e in events if e.get("type") == "note_on"]
         note_off_events = [e for e in events if e.get("type") == "note_off"]
-        
+
         # Extract note numbers from note_on events and reverse them
         on_notes = [e.get("note") for e in note_on_events]
         reversed_on_notes = list(reversed(on_notes))
-        
+
         # Extract note numbers from note_off events and reverse them
         off_notes = [e.get("note") for e in note_off_events]
         reversed_off_notes = list(reversed(off_notes))
-        
+
         # Reconstruct events with reversed notes but original structure
         result = []
         on_index = 0
         off_index = 0
-        
+
         for event in events:
             if event.get("type") == "note_on":
-                result.append({
-                    "type": "note_on",
-                    "note": reversed_on_notes[on_index],
-                    "velocity": event.get("velocity"),
-                    "time": event.get("time"),
-                    "channel": event.get("channel", 0),
-                })
+                result.append(
+                    {
+                        "type": "note_on",
+                        "note": reversed_on_notes[on_index],
+                        "velocity": event.get("velocity"),
+                        "time": event.get("time"),
+                        "channel": event.get("channel", 0),
+                    }
+                )
                 on_index += 1
             elif event.get("type") == "note_off":
-                result.append({
-                    "type": "note_off",
-                    "note": reversed_off_notes[off_index],
-                    "velocity": event.get("velocity"),
-                    "time": event.get("time"),
-                    "channel": event.get("channel", 0),
-                })
+                result.append(
+                    {
+                        "type": "note_off",
+                        "note": reversed_off_notes[off_index],
+                        "velocity": event.get("velocity"),
+                        "time": event.get("time"),
+                        "channel": event.get("channel", 0),
+                    }
+                )
                 off_index += 1
 
         return result
+
+
+# =============================================================================
+# GODZILLA CONTINUATION ENGINE
+# =============================================================================
+
+
+class GodzillaContinuationEngine:
+    """
+    Continue a short MIDI phrase with the Godzilla Piano Transformer.
+
+    Generates a small continuation and appends it after the input events.
+    """
+
+    def __init__(self, generate_tokens: int = 32):
+        self.name = "Godzilla"
+        self.generate_tokens = generate_tokens
+
+    def process(self, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if not events:
+            return []
+
+        model = get_model("godzilla")
+        new_events = model.generate_continuation(
+            events,
+            tokens=self.generate_tokens,
+            seed=None,
+        )
+        out_of_range = count_out_of_range_events(new_events)
+        if out_of_range:
+            print(f"Godzilla: dropped {out_of_range} out-of-range events")
+        return filter_events_to_keyboard_range(new_events)
 
 
 # =============================================================================
@@ -133,7 +149,11 @@ class ReverseParrotEngine(MIDIEngine):
 class EngineRegistry:
     """Registry for managing available MIDI engines"""
 
-    _engines = {"parrot": ParrotEngine, "reverse_parrot": ReverseParrotEngine}
+    _engines = {
+        "parrot": ParrotEngine,
+        "reverse_parrot": ReverseParrotEngine,
+        "godzilla_continue": GodzillaContinuationEngine,
+    }
 
     @classmethod
     def register(cls, engine_id: str, engine_class: type):
@@ -141,7 +161,7 @@ class EngineRegistry:
         cls._engines[engine_id] = engine_class
 
     @classmethod
-    def get_engine(cls, engine_id: str) -> MIDIEngine:
+    def get_engine(cls, engine_id: str):
         """Get an engine instance by ID"""
         if engine_id not in cls._engines:
             raise ValueError(f"Unknown engine: {engine_id}")
