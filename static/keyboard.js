@@ -85,32 +85,38 @@ const pressedKeys = new Set();
 
 const instruments = {
   synth: () => new Tone.PolySynth(Tone.Synth, {
+    maxPolyphony: 24,
     oscillator: { type: 'sine' },
     envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
   }).toDestination(),
   
   piano: () => new Tone.PolySynth(Tone.Synth, {
+    maxPolyphony: 24,
     oscillator: { type: 'triangle' },
     envelope: { attack: 0.001, decay: 0.2, sustain: 0.1, release: 2 }
   }).toDestination(),
   
   organ: () => new Tone.PolySynth(Tone.Synth, {
+    maxPolyphony: 24,
     oscillator: { type: 'sine4' },
     envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.1 }
   }).toDestination(),
   
   bass: () => new Tone.PolySynth(Tone.Synth, {
+    maxPolyphony: 24,
     oscillator: { type: 'sawtooth' },
     envelope: { attack: 0.01, decay: 0.1, sustain: 0.4, release: 1.5 },
     filter: { Q: 2, type: 'lowpass', rolloff: -12 }
   }).toDestination(),
   
   pluck: () => new Tone.PolySynth(Tone.Synth, {
+    maxPolyphony: 24,
     oscillator: { type: 'triangle' },
     envelope: { attack: 0.001, decay: 0.3, sustain: 0, release: 0.3 }
   }).toDestination(),
   
   fm: () => new Tone.PolySynth(Tone.FMSynth, {
+    maxPolyphony: 24,
     harmonicity: 3,
     modulationIndex: 10,
     envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 1 }
@@ -140,7 +146,7 @@ function buildKeyboard() {
       keyEl.dataset.midi = midiNote;
       
       const shortcut = keyShortcuts[midiNote] || '';
-      const shortcutHtml = shortcut ? `<div style="font-size:10px;opacity:0.5;">${shortcut}</div>` : '';
+      const shortcutHtml = shortcut ? `<div class="shortcut-hint">${shortcut}</div>` : '';
       keyEl.innerHTML = `<div style="padding-bottom:6px;font-size:11px">${shortcutHtml}${k.name}${octaveNum}</div>`;
       
       keyboardEl.appendChild(keyEl);
@@ -421,7 +427,12 @@ instrumentSelect.addEventListener('change', () => {
 });
 
 keyboardToggle.addEventListener('change', () => {
-  if (!keyboardToggle.checked) {
+  if (keyboardToggle.checked) {
+    // Show keyboard shortcuts
+    keyboardEl.classList.add('shortcuts-visible');
+  } else {
+    // Hide keyboard shortcuts
+    keyboardEl.classList.remove('shortcuts-visible');
     // Release all currently pressed keyboard keys
     pressedKeys.forEach(key => {
       const midiNote = keyMap[key];

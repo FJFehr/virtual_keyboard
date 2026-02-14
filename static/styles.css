@@ -91,6 +91,30 @@ body {
   box-shadow: 
     0 4px 8px rgba(0, 0, 0, 0.3),
     inset 0 -2px 5px rgba(0, 0, 0, 0.1);
+  color: #2a0050;
+  font-weight: bold;
+}
+
+.key .shortcut-hint {
+  font-size: 10px;
+  opacity: 0;
+  color: #5a00cc;
+  font-weight: bold;
+  text-shadow: 0 0 2px rgba(90, 0, 204, 0.3);
+  transition: opacity 0.2s ease;
+}
+
+.key.black {
+  color: #00ffff;
+}
+
+.key.black .shortcut-hint {
+  color: #00ffff;
+  text-shadow: 0 0 3px rgba(0, 255, 255, 0.5);
+}
+
+.shortcuts-visible .key .shortcut-hint {
+  opacity: 1;
 }
 
 .key:hover {
