@@ -7,60 +7,189 @@
   <link rel="stylesheet" href="/file=static/styles.css" />
 </head>
 <body>
-  <!-- Welcome Header -->
-  <div class="welcome-header">
-    <h1 class="neon-text">SYNTH<i>IA</i></h1>
-  </div>
-  
-  <div id="mainContainer">
-    <!-- Keyboard Section -->
-    <div class="keyboard-section">
-      <div id="keyboard"></div>
-
-      <div class="controls">
-        <label>
-          Instrument:
-          <select id="instrumentSelect">
-            <option value="synth">Synth</option>
-            <option value="piano">Piano</option>
-            <option value="organ">Organ</option>
-            <option value="bass">Bass</option>
-            <option value="pluck">Pluck</option>
-            <option value="fm">FM Synth</option>
-          </select>
-        </label>
+  <div class="app-shell">
+    <div class="welcome-header">
+      <h1><span class="synth">SYNTH</span><i class="ia">IA</i></h1>
+      
+      <div class="welcome-text">
+        <p class="welcome-intro">
+          Play a short phrase and let the AI respond musically. Choose your instrument, AI voice, and response style.
+        </p>
         
-        <label>
-          Engine:
-          <select id="engineSelect">
-            <option value="parrot">Parrot</option>
-            <option value="reverse_parrot">Reverse Parrot</option>
-            <option value="godzilla_continue">Godzilla</option>
-          </select>
-        </label>
-        
-        <button id="recordBtn">Record</button>
-        <button id="stopBtn" disabled>Stop</button>
-        <button id="playbackBtn" disabled>Playback</button>
-        <button id="saveBtn" disabled>Save MIDI</button>
-        <button id="panicBtn" style="background: #ff4444; color: white;">Panic 🚨</button>
-        
-        <label>
-          <input type="checkbox" id="keyboardToggle">
-          Enable Keyboard Input
-        </label>
-        
-        <span id="status">Idle</span>
+        <div class="features-guide" style="display: none;">
+          <h3>Features</h3>
+          <ul class="features-list">
+            <li><strong>Game Mode:</strong> Start an interactive call-and-response session where the AI listens to your playing and responds musically</li>
+            
+            <li><strong>Instrument:</strong> Choose the synth sound and effects for your keyboard—Synth, Piano, Organ, Bass, Pluck, or FM Synth create different tonal qualities</li>
+            
+            <li><strong>AI Voice:</strong> Select which instrument sound the AI uses when it responds to your playing</li>
+            
+            <li><strong>Engine:</strong> Choose how the AI responds:
+              <ul class="sub-list">
+                <li><em>Parrot:</em> Repeats exactly what you played</li>
+                <li><em>Reverse Parrot:</em> Plays your notes in reverse order (backward)</li>
+                <li><em>Godzilla:</em> Uses AI to generate a musically coherent continuation of your phrase</li>
+              </ul>
+            </li>
+            
+            <li><strong>Runtime:</strong> Select where the AI runs—CPU (slower, always available), ZeroGPU (faster if available), or Auto (prefers GPU, falls back to CPU)</li>
+            
+            <li><strong>AI Style:</strong> Post-processing that shapes the AI's melodic style (Godzilla engine only):
+              <ul class="sub-list">
+                <li><em>Melodic:</em> Smooth, singable melodies with minimal pitch leaps</li>
+                <li><em>Motif Echo:</em> Echoes the first couple notes from your input at the end of the response</li>
+                <li><em>Playful:</em> Adds bouncy alternating pitch shifts for a whimsical character</li>
+              </ul>
+            </li>
+            
+            <li><strong>Response Mode:</strong> Determines the processing pipeline and sampling creativity (Godzilla engine only):
+              <ul class="sub-list">
+                <li><em>Raw Godzilla:</em> Pure AI output with maximum creativity (temperature=1.0, more unpredictable)</li>
+                <li><em>Current Pipeline:</em> Balanced mode applying your AI Style with moderate creativity (temperature=0.9, best of 3 candidates)</li>
+                <li><em>Musical Polish:</em> Refined mode with advanced processing—quantizes pitches to musical scales, adjusts rhythm, blends velocities, and ensures musical coherence (temperature=0.85, picks best of 4)</li>
+              </ul>
+            </li>
+            
+            <li><strong>Response Length:</strong> How many notes the AI generates—Short (8 notes), Medium (14 notes), Long (20 notes), or Extended (28 notes)</li>
+            
+            <li><strong>Record/Playback:</strong> Record your keyboard performance and play it back to hear it again</li>
+            
+            <li><strong>Save MIDI:</strong> Export your recordings as MIDI files for use in DAWs or other music software</li>
+          </ul>
+        </div>
       </div>
     </div>
+    
+    <div id="mainContainer">
+      <div class="keyboard-section card">
+        <div id="keyboard"></div>
+        <div class="keyboard-toggle-row">
+          <label class="keyboard-toggle-pill">
+            <input type="checkbox" id="keyboardToggle">
+            <span class="toggle-track"></span>
+            <span class="toggle-text">Enable Keyboard Input</span>
+          </label>
+          <div class="tooltip-display-area" id="tooltipDisplay"></div>
+        </div>
 
-    <!-- MIDI Monitor Section -->
-    <div class="monitor-section">
-      <div class="terminal-header">
-        <h4>MIDI MONITOR</h4>
-        <button id="clearTerminal">Clear</button>
+        <div class="controls card">
+          <div class="control-grid">
+            <label class="control-item" data-control-id="instrument">
+              Instrument
+              <select id="instrumentSelect" data-description="Choose the synth sound for your keyboard">
+                <option value="synth" data-tooltip="Bright, modern electronic sound">Synth</option>
+                <option value="piano" data-tooltip="Classic acoustic piano tone">Piano</option>
+                <option value="organ" data-tooltip="Rich, warm organ pipes">Organ</option>
+                <option value="bass" data-tooltip="Deep, resonant bass tones">Bass</option>
+                <option value="pluck" data-tooltip="Percussive plucked string sound">Pluck</option>
+                <option value="fm" data-tooltip="Complex, bell-like FM synthesis">FM Synth</option>
+              </select>
+            </label>
+
+            <label class="control-item" data-control-id="aiVoice">
+              AI Voice
+              <select id="aiInstrumentSelect" data-description="Select which instrument sound the AI uses when it responds">
+                <option value="synth" data-tooltip="Bright, modern electronic sound">Synth</option>
+                <option value="piano" data-tooltip="Classic acoustic piano tone">Piano</option>
+                <option value="organ" data-tooltip="Rich, warm organ pipes">Organ</option>
+                <option value="bass" data-tooltip="Deep, resonant bass tones">Bass</option>
+                <option value="pluck" data-tooltip="Percussive plucked string sound">Pluck</option>
+                <option value="fm" selected data-tooltip="Complex, bell-like FM synthesis">FM Synth</option>
+              </select>
+            </label>
+            
+            <label class="control-item" data-control-id="engine">
+              Engine
+              <select id="engineSelect" data-description="Your generation model">
+                <option value="parrot" data-tooltip="Repeats your exact melody — useful for practicing or creating canon patterns">Parrot</option>
+                <option value="reverse_parrot" data-tooltip="Plays your melody backward — creates mirror images and harmonic inversions">Reverse Parrot</option>
+                <option value="godzilla_continue" data-tooltip="MIDI transformer that generates new musical continuations">Godzilla</option>
+              </select>
+            </label>
+
+            <label class="control-item" id="runtimeControl" data-control-id="runtime">
+              Runtime
+              <select id="runtimeSelect" data-description="Choose where the AI runs for faster or more reliable performance">
+                <option value="cpu" data-tooltip="Slower but always available, runs on CPU">CPU</option>
+                <option value="gpu" data-tooltip="Faster when available, uses ZeroGPU for inference">ZeroGPU</option>
+                <option value="auto" data-tooltip="Automatically prefers GPU if available, falls back to CPU" selected>Auto (GPU then CPU)</option>
+              </select>
+            </label>
+
+            <label class="control-item" data-control-id="aiStyle">
+              AI Style
+              <select id="responseStyleSelect" data-description="Applies post-processing styling to shape the AI's melodic character">
+                <option value="melodic" data-tooltip="Smooth, singable melodies with minimal pitch leaps">Melodic</option>
+                <option value="motif_echo" data-tooltip="Echoes the first couple notes from your input at the end of the response">Motif Echo</option>
+                <option value="playful" data-tooltip="Bouncy alternating pitch shifts for a whimsical, playful character">Playful</option>
+              </select>
+            </label>
+
+            <label class="control-item" data-control-id="responseMode">
+              Response Mode
+              <select id="responseModeSelect" data-description="Processing pipeline & creativity level">
+                <option value="raw_godzilla" data-tooltip="Pure AI output, maximum creativity (temperature=1.0, unpredictable)" selected>Raw Godzilla</option>
+                <option value="current_pipeline" data-tooltip="Balanced mode with AI Style applied, moderate creativity (temperature=0.9)">Current Pipeline</option>
+                <option value="musical_polish" data-tooltip="Refined with scale quantization and rhythm adjustment (temperature=0.85)">Musical Polish</option>
+              </select>
+            </label>
+
+            <label class="control-item" data-control-id="responseLength">
+              Response Length
+              <select id="responseLengthSelect" data-description="How many notes the AI generates in each response">
+                <option value="short" data-tooltip="8 notes - quick, snappy responses" selected>Short</option>
+                <option value="medium" data-tooltip="14 notes - balanced response length">Medium</option>
+                <option value="long" data-tooltip="20 notes - longer, more developed phrases">Long</option>
+                <option value="extended" data-tooltip="28 notes - extended musical conversations">Extended</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="action-row">
+            <div class="btn-tooltip-wrapper">
+              <button id="recordBtn" class="btn btn-primary">Record</button>
+              <div class="btn-tooltip">Record your playing to MIDI. Click Record, play, then Stop.</div>
+            </div>
+            <div class="btn-tooltip-wrapper">
+              <button id="stopBtn" class="btn btn-secondary" disabled>Stop</button>
+              <div class="btn-tooltip">Stop recording your performance.</div>
+            </div>
+            <div class="btn-tooltip-wrapper">
+              <button id="playbackBtn" class="btn btn-secondary" disabled>Playback</button>
+              <div class="btn-tooltip">Play back your recorded performance.</div>
+            </div>
+            <div class="btn-tooltip-wrapper">
+              <button id="gameStartBtn" class="btn btn-game">Start Game</button>
+              <div class="btn-tooltip">Start call & response: play a phrase, AI responds, repeat.</div>
+            </div>
+            <div class="btn-tooltip-wrapper">
+              <button id="gameStopBtn" class="btn btn-secondary" disabled>Stop Game</button>
+              <div class="btn-tooltip">Stop the ongoing game session.</div>
+            </div>
+            <div class="btn-tooltip-wrapper">
+              <button id="saveBtn" class="btn btn-secondary" disabled>Save MIDI</button>
+              <div class="btn-tooltip">Export your recording as a MIDI file.</div>
+            </div>
+            <div class="btn-tooltip-wrapper">
+              <button id="panicBtn" class="btn btn-danger">Panic</button>
+              <div class="btn-tooltip">Stop all playing notes immediately.</div>
+            </div>
+            <span id="status">Idle</span>
+          </div>
+        </div>
       </div>
-      <div id="terminal"></div>
+
+      <div class="monitor-section card">
+        <div class="terminal-header">
+          <h4>MIDI MONITOR</h4>
+          <div class="btn-tooltip-wrapper">
+            <button id="clearTerminal" class="btn btn-secondary">Clear</button>
+            <div class="btn-tooltip">Clear all MIDI events from the monitor.</div>
+          </div>
+        </div>
+        <div id="terminal"></div>
+      </div>
     </div>
   </div>
 
