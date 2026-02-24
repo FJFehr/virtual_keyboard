@@ -201,6 +201,61 @@ Code consolidation to improve maintainability:
 
 ---
 
+## ⚡ Benchmarking
+
+`benchmark.py` measures Godzilla model generation speed across all combinations of input length and generation length, with CPU and GPU compared side by side.
+
+### What it tests
+
+| Axis | Values |
+|------|--------|
+| Input length | Short (8 notes, ~4 s) · Long (90 notes, ~18 s) |
+| Generation length | 32 · 64 · 96 · 128 tokens (matches the four UI presets) |
+| Devices | CPU always · CUDA if available |
+
+Each combination runs a warm-up pass (model load, timing discarded) followed by `--runs` timed passes. The summary tables report mean, std, min, max in both ms and seconds, plus tokens/sec and GPU speedup.
+
+### Usage
+
+```bash
+# Full sweep — CPU + GPU (if available), 5 runs per combination
+uv run python benchmark.py
+
+# CPU only (useful for verifying the script or on CPU-only machines)
+uv run python benchmark.py --cpu-only
+
+# Increase runs for tighter statistics
+uv run python benchmark.py --runs 10
+
+# Multi-candidate generation (higher quality, slower)
+uv run python benchmark.py --candidates 3
+```
+
+Results are printed to stdout and saved to `benchmark_results.txt` (override with `--output`).
+
+### Example output
+
+```
+============================================================
+  Device: CUDA  |  candidates=1
+============================================================
+  [warm-up] loading model + first inference...
+  input=short (8 notes, ~4s)   gen= 32 tokens  [1:85ms] [2:82ms] ...
+  ...
+
+================================================================================
+  SUMMARY — CUDA  |  candidates=1
+================================================================================
+  Input                     Gen tok   Mean ms    Mean s   Std ms   Min ms   Max ms   tok/s
+  -----------------------------------------------------------------------------------------
+  short (8 notes, ~4s)           32        85      0.09      2.1       82       89   376.5
+  short (8 notes, ~4s)          128       290      0.29      4.3      284      297   441.4
+  long  (90 notes, ~18s)         32        91      0.09      1.8       88       94   351.6
+  long  (90 notes, ~18s)        128       305      0.31      3.9      299      312   419.7
+```
+
+---
+
 ## 🛠️ Development Tips
 
 ### Debugging
