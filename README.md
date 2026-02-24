@@ -18,7 +18,7 @@ Play, record, and let AI continue your musical phrases in real-time. 🎹
 
 ```bash
 # Install dependencies
-uv pip install -r requirements.txt
+uv sync
 
 # Run the app
 uv run python app.py
