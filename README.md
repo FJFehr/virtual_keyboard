@@ -111,7 +111,8 @@ JavaScript plays result through Tone.js synth
 - **Fixed tempo**: 75 BPM, continuous 4/4 metronome while game mode is active
 - **Count-in**: Animated `3, 2, 1, GO` before user and AI turns
 - **Turn windows**: User and AI each use independently selected bar lengths (1 or 2)
-- **Quantized AI playback**: AI response is quantized to a 16th-note grid and clamped to the selected AI bar window
+- **Fast game inference**: Game mode uses a fixed `32` generation tokens for quicker AI response
+- **Quantized AI playback**: AI response is stretched to the selected AI bar window, then quantized to a 16th-note grid
 - **Loop behavior**: Empty user turns automatically retry after a fresh count-in; loop continues until Stop Game
 
 ---

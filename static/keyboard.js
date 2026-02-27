@@ -988,15 +988,45 @@ function clampValue(value, minValue, maxValue) {
   return Math.max(minValue, Math.min(maxValue, value));
 }
 
+function stretchNotePairsToDuration(pairs, targetDurationSec) {
+  if (!Array.isArray(pairs) || pairs.length === 0) {
+    return [];
+  }
+
+  const safeTarget = Math.max(0.1, Number(targetDurationSec) || 0.1);
+  const sourceEnd = pairs.reduce((maxEnd, pair) => Math.max(maxEnd, Number(pair.end) || 0), 0);
+
+  if (sourceEnd <= 0) {
+    const spacing = safeTarget / Math.max(1, pairs.length);
+    return pairs.map((pair, idx) => {
+      const start = idx * spacing;
+      const end = Math.min(safeTarget, start + Math.max(0.08, spacing * 0.8));
+      return {
+        ...pair,
+        start,
+        end: Math.max(start + 0.08, end)
+      };
+    });
+  }
+
+  const scale = safeTarget / sourceEnd;
+  return pairs.map((pair) => ({
+    ...pair,
+    start: Math.max(0, (Number(pair.start) || 0) * scale),
+    end: Math.max(0, (Number(pair.end) || 0) * scale)
+  }));
+}
+
 function quantizeAiResponseForGame(rawEvents, aiBars) {
   const maxDurationSec = barsToSeconds(aiBars);
   const quantStepSec = beatSec() * GAME_QUANT_STEP_BEATS;
   const minDurationSec = Math.max(0.08, quantStepSec * 0.5);
 
-  const pairs = eventsToNotePairs(normalizeEventsToZero(rawEvents));
-  if (pairs.length === 0) {
+  const rawPairs = eventsToNotePairs(normalizeEventsToZero(rawEvents));
+  if (rawPairs.length === 0) {
     return [];
   }
+  const pairs = stretchNotePairsToDuration(rawPairs, maxDurationSec);
 
   const out = [];
   pairs.forEach((pair) => {
@@ -1027,8 +1057,8 @@ function quantizeAiResponseForGame(rawEvents, aiBars) {
   return notePairsToEvents(out);
 }
 
-function getGameGenerateTokens(aiBars) {
-  return aiBars >= 2 ? 128 : 64;
+function getGameGenerateTokens() {
+  return 32;
 }
 
 // =============================================================================
@@ -1736,7 +1766,7 @@ async function finishUserTurn(sessionId) {
     const aiBars = getSelectedAIBars();
     const decodingOptions = getSelectedDecodingOptions();
     const result = await processEventsThroughEngine(callEvents, {
-      generate_tokens: getGameGenerateTokens(aiBars),
+      generate_tokens: getGameGenerateTokens(),
       ...decodingOptions
     });
     const processedResponse = buildGameProcessedAIResponse(result.events || [], callEvents, aiBars);
