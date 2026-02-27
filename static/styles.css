@@ -30,8 +30,22 @@
 html,
 body {
   width: 100%;
+  min-height: 100%;
   max-width: 100%;
   overflow-x: clip;
+  background-color: var(--bg-night);
+}
+
+gradio-app,
+.gradio-container,
+.gradio-container .main,
+.gradio-container .contain,
+.gradio-container .wrap {
+  background: transparent !important;
+}
+
+.gradio-container {
+  max-width: 100% !important;
 }
 
 body {
