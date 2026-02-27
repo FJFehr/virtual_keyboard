@@ -705,6 +705,52 @@ input[type='checkbox']:checked::after {
   overflow: hidden;
 }
 
+#countdownOverlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, rgba(11, 7, 25, 0.2), rgba(4, 2, 12, 0.72));
+  opacity: 0;
+  pointer-events: none;
+  z-index: 30;
+  transition: opacity 220ms ease;
+}
+
+#countdownOverlay.active {
+  opacity: 1;
+}
+
+#countdownText {
+  min-width: 180px;
+  padding: 20px 28px;
+  text-align: center;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  font-size: clamp(2.8rem, 10vw, 6.2rem);
+  color: #c2feff;
+  text-shadow:
+    0 0 20px rgba(62, 244, 255, 0.72),
+    0 0 42px rgba(62, 244, 255, 0.45),
+    0 0 76px rgba(139, 64, 255, 0.36);
+  transform: scale(0.84);
+  opacity: 0;
+}
+
+#countdownOverlay.active #countdownText.pulse {
+  animation: countdownPulse 560ms ease both;
+}
+
+#countdownOverlay.active #countdownText.go {
+  color: #ffd8f2;
+  text-shadow:
+    0 0 18px rgba(255, 63, 176, 0.88),
+    0 0 44px rgba(255, 63, 176, 0.56),
+    0 0 84px rgba(62, 244, 255, 0.35);
+}
+
 .terminal-header {
   display: flex;
   justify-content: space-between;
@@ -810,6 +856,21 @@ input[type='checkbox']:checked::after {
   }
   100% {
     background-position: 0 0, 0 220px, 62px 0;
+  }
+}
+
+@keyframes countdownPulse {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.78);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(0) scale(1.08);
+  }
+  100% {
+    opacity: 0.2;
+    transform: translateY(-2px) scale(0.98);
   }
 }
 

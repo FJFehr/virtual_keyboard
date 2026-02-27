@@ -144,6 +144,22 @@
                 <option value="extended" data-tooltip="28 notes - extended musical conversations">Extended</option>
               </select>
             </label>
+
+            <label class="control-item" data-control-id="userBars">
+              User Bars
+              <select id="userBarsSelect" data-description="Bars available for your call during game mode">
+                <option value="1" data-tooltip="One bar call window at 75 BPM">1 bar</option>
+                <option value="2" data-tooltip="Two bar call window at 75 BPM" selected>2 bars</option>
+              </select>
+            </label>
+
+            <label class="control-item" data-control-id="aiBars">
+              AI Bars
+              <select id="aiBarsSelect" data-description="Bars available for AI response during game mode">
+                <option value="1" data-tooltip="One bar AI response window at 75 BPM">1 bar</option>
+                <option value="2" data-tooltip="Two bar AI response window at 75 BPM" selected>2 bars</option>
+              </select>
+            </label>
           </div>
 
           <div class="action-row">
@@ -190,6 +206,10 @@
         </div>
         <div id="terminal"></div>
       </div>
+    </div>
+
+    <div id="countdownOverlay" aria-live="polite" aria-atomic="true">
+      <div id="countdownText"></div>
     </div>
   </div>
 

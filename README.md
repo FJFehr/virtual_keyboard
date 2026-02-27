@@ -90,7 +90,7 @@ JavaScript plays result through Tone.js synth
 - **Record button**: Capture MIDI events from keyboard
 - **Play button**: Play back recorded events
 - **Save button**: Download recording as .mid file
-- **Game mode**: Take turns with AI completing phrases
+- **Game mode**: Beat-synced call-and-response loop with fixed 75 BPM metronome
 
 ### MIDI Engines
 1. **Parrot**: Repeats your exact melody
@@ -102,9 +102,17 @@ JavaScript plays result through Tone.js synth
 - **Style selector**: AI style (melodic, energetic, ornate, etc.)
 - **Response mode**: Control AI generation behavior
 - **Runtime selector**: GPU (fast) vs CPU (reliable)
+- **User Bars / AI Bars**: Independent 1- or 2-bar turn lengths in game mode
 - **Instrument selector**: Change synth sound
 - **AI voice selector**: Change AI synth sound
 - **Terminal**: Real-time event logging
+
+### Beat-Synced Game Mode
+- **Fixed tempo**: 75 BPM, continuous 4/4 metronome while game mode is active
+- **Count-in**: Animated `3, 2, 1, GO` before user and AI turns
+- **Turn windows**: User and AI each use independently selected bar lengths (1 or 2)
+- **Quantized AI playback**: AI response is quantized to a 16th-note grid and clamped to the selected AI bar window
+- **Loop behavior**: Empty user turns automatically retry after a fresh count-in; loop continues until Stop Game
 
 ---
 

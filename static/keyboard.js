@@ -82,8 +82,12 @@ let runtimeSelect = null;
 let responseStyleSelect = null;
 let responseModeSelect = null;
 let responseLengthSelect = null;
+let userBarsSelect = null;
+let aiBarsSelect = null;
 let terminal = null;
 let clearTerminal = null;
+let countdownOverlay = null;
+let countdownText = null;
 
 // =============================================================================
 // STATE
@@ -99,11 +103,25 @@ let selectedEngine = 'parrot'; // Default engine
 let serverConfig = null; // Will hold instruments and keyboard config from server
 let gameActive = false;
 let gameTurn = 0;
-let gameTurnTimerId = null;
-let gameTurnTimeoutId = null;
 
-const USER_TURN_LIMIT_SEC = 6;
-const GAME_NEXT_TURN_DELAY_MS = 800;
+const GAME_BPM = 75;
+const GAME_BEATS_PER_BAR = 4;
+const GAME_COUNTIN_BEATS = 3;
+const GAME_QUANT_STEP_BEATS = 0.25; // 16th-note grid
+const GAME_RETRY_DELAY_MS = 500;
+
+let gameSessionId = 0;
+let gameClockOriginSec = 0;
+let gamePhase = 'idle';
+let gameCaptureActive = false;
+let gameCaptureStartWallSec = 0;
+let gameCapturedEvents = [];
+const gameCaptureActiveNotes = new Set();
+const gameTimeoutIds = new Set();
+let metronomeBeatIndex = 0;
+let metronomeKick = null;
+let metronomeSnare = null;
+let metronomeHat = null;
 
 const RESPONSE_MODES = {
   raw_godzilla: { label: 'Raw Godzilla' },
@@ -435,8 +453,12 @@ function cacheUIElements() {
   responseStyleSelect = document.getElementById('responseStyleSelect');
   responseModeSelect = document.getElementById('responseModeSelect');
   responseLengthSelect = document.getElementById('responseLengthSelect');
+  userBarsSelect = document.getElementById('userBarsSelect');
+  aiBarsSelect = document.getElementById('aiBarsSelect');
   terminal = document.getElementById('terminal');
   clearTerminal = document.getElementById('clearTerminal');
+  countdownOverlay = document.getElementById('countdownOverlay');
+  countdownText = document.getElementById('countdownText');
 }
 
 async function waitForKeyboardUIElements(timeoutMs = 20000) {
@@ -454,8 +476,12 @@ async function waitForKeyboardUIElements(timeoutMs = 20000) {
     'instrumentSelect',
     'engineSelect',
     'runtimeSelect',
+    'userBarsSelect',
+    'aiBarsSelect',
     'terminal',
-    'clearTerminal'
+    'clearTerminal',
+    'countdownOverlay',
+    'countdownText'
   ];
 
   const started = Date.now();
@@ -709,6 +735,20 @@ function getSelectedResponseLengthPreset() {
   return getSelectedPreset(responseLengthSelect, RESPONSE_LENGTH_PRESETS, 'short', 'lengthId');
 }
 
+function getSelectedGameBars(selectElement, fallback = 2) {
+  const raw = selectElement ? Number(selectElement.value) : fallback;
+  if (raw === 1 || raw === 2) return raw;
+  return fallback;
+}
+
+function getSelectedUserBars() {
+  return getSelectedGameBars(userBarsSelect, 2);
+}
+
+function getSelectedAIBars() {
+  return getSelectedGameBars(aiBarsSelect, 2);
+}
+
 function getDecodingOptionsForMode(modeId) {
   if (modeId === 'raw_godzilla') {
     return { temperature: 1.0, top_p: 0.98, num_candidates: 1 };
@@ -727,6 +767,28 @@ function getSelectedDecodingOptions() {
 function getSelectedRuntime() {
   if (!runtimeSelect || !runtimeSelect.value) return 'auto';
   return runtimeSelect.value;
+}
+
+function beatSec() {
+  return 60 / GAME_BPM;
+}
+
+function barSec() {
+  return beatSec() * GAME_BEATS_PER_BAR;
+}
+
+function barsToSeconds(bars) {
+  return Math.max(1, Number(bars) || 1) * barSec();
+}
+
+function nowGameSec() {
+  return nowSec() - gameClockOriginSec;
+}
+
+function nextBarAlignedStart(minLeadBeats = GAME_COUNTIN_BEATS) {
+  const minStart = nowGameSec() + (Math.max(0, minLeadBeats) * beatSec());
+  const barLength = barSec();
+  return Math.ceil(minStart / barLength) * barLength;
 }
 
 function quantizeToStep(value, step) {
@@ -893,6 +955,82 @@ function buildProcessedAIResponse(rawResponseEvents, callEvents) {
   };
 }
 
+function buildGameProcessedAIResponse(rawResponseEvents, callEvents, aiBars) {
+  const mode = getSelectedResponseMode();
+  const gameLengthPreset = {
+    label: `${aiBars} bar${aiBars > 1 ? 's' : ''}`,
+    maxNotes: aiBars === 1 ? 12 : 24,
+    maxDurationSec: barsToSeconds(aiBars)
+  };
+
+  if (mode.modeId === 'raw_godzilla') {
+    return {
+      label: `${mode.label} (${gameLengthPreset.label})`,
+      events: normalizeEventsToZero(rawResponseEvents || [])
+    };
+  }
+
+  if (mode.modeId === 'musical_polish') {
+    return {
+      label: `${mode.label} (${gameLengthPreset.label})`,
+      events: notePairsToEvents(applyMusicalPolish(rawResponseEvents || [], callEvents, gameLengthPreset))
+    };
+  }
+
+  const styled = applyResponseStyle(rawResponseEvents || [], callEvents, gameLengthPreset);
+  return {
+    label: `${mode.label} / ${styled.styleLabel} (${gameLengthPreset.label})`,
+    events: styled.events
+  };
+}
+
+function clampValue(value, minValue, maxValue) {
+  return Math.max(minValue, Math.min(maxValue, value));
+}
+
+function quantizeAiResponseForGame(rawEvents, aiBars) {
+  const maxDurationSec = barsToSeconds(aiBars);
+  const quantStepSec = beatSec() * GAME_QUANT_STEP_BEATS;
+  const minDurationSec = Math.max(0.08, quantStepSec * 0.5);
+
+  const pairs = eventsToNotePairs(normalizeEventsToZero(rawEvents));
+  if (pairs.length === 0) {
+    return [];
+  }
+
+  const out = [];
+  pairs.forEach((pair) => {
+    const quantizedStart = clampValue(
+      quantizeToStep(pair.start, quantStepSec),
+      0,
+      Math.max(0, maxDurationSec - minDurationSec)
+    );
+    const quantizedEnd = quantizeToStep(pair.end, quantStepSec);
+    const end = clampValue(
+      Math.max(quantizedStart + minDurationSec, quantizedEnd),
+      quantizedStart + minDurationSec,
+      maxDurationSec
+    );
+
+    if (end - quantizedStart < minDurationSec * 0.75) {
+      return;
+    }
+
+    out.push({
+      note: clampMidiNote(Math.round(pair.note)),
+      start: quantizedStart,
+      end,
+      velocity: clampValue(Math.round(pair.velocity || 100), 1, 127)
+    });
+  });
+
+  return notePairsToEvents(out);
+}
+
+function getGameGenerateTokens(aiBars) {
+  return aiBars >= 2 ? 128 : 64;
+}
+
 // =============================================================================
 // TERMINAL LOGGING
 // =============================================================================
@@ -959,7 +1097,10 @@ function noteOn(midiNote, velocity = 100) {
   synth.triggerAttack(freq, undefined, velocity / 127);
   
   const noteName = midiToNoteName(midiNote);
-  const timestamp = recording ? (nowSec() - startTime).toFixed(3) : '--';
+  const captureTimestamp = recording
+    ? (nowSec() - startTime)
+    : (gameCaptureActive ? (nowSec() - gameCaptureStartWallSec) : null);
+  const timestamp = captureTimestamp !== null ? captureTimestamp.toFixed(3) : '--';
   logToTerminal(
     `[${timestamp}s] NOTE_ON  ${noteName} (${midiNote}) vel=${velocity}`, 
     'note-on'
@@ -975,6 +1116,17 @@ function noteOn(midiNote, velocity = 100) {
     };
     events.push(event);
   }
+
+  if (gameCaptureActive) {
+    gameCaptureActiveNotes.add(midiNote);
+    gameCapturedEvents.push({
+      type: 'note_on',
+      note: midiNote,
+      velocity: Math.max(1, velocity | 0),
+      time: Math.max(0, nowSec() - gameCaptureStartWallSec),
+      channel: 0
+    });
+  }
 }
 
 function noteOff(midiNote) {
@@ -982,7 +1134,10 @@ function noteOff(midiNote) {
   synth.triggerRelease(freq);
   
   const noteName = midiToNoteName(midiNote);
-  const timestamp = recording ? (nowSec() - startTime).toFixed(3) : '--';
+  const captureTimestamp = recording
+    ? (nowSec() - startTime)
+    : (gameCaptureActive ? (nowSec() - gameCaptureStartWallSec) : null);
+  const timestamp = captureTimestamp !== null ? captureTimestamp.toFixed(3) : '--';
   logToTerminal(
     `[${timestamp}s] NOTE_OFF ${noteName} (${midiNote})`, 
     'note-off'
@@ -997,6 +1152,17 @@ function noteOff(midiNote) {
       channel: 0
     };
     events.push(event);
+  }
+
+  if (gameCaptureActive) {
+    gameCaptureActiveNotes.delete(midiNote);
+    gameCapturedEvents.push({
+      type: 'note_off',
+      note: midiNote,
+      velocity: 0,
+      time: Math.max(0, nowSec() - gameCaptureStartWallSec),
+      channel: 0
+    });
   }
 }
 
@@ -1126,15 +1292,142 @@ async function saveMIDI() {
   }
 }
 
-function clearGameTimers() {
-  if (gameTurnTimerId !== null) {
-    clearInterval(gameTurnTimerId);
-    gameTurnTimerId = null;
+function clearTrackedGameTimeouts() {
+  gameTimeoutIds.forEach((id) => clearTimeout(id));
+  gameTimeoutIds.clear();
+}
+
+function scheduleGameTimeout(callback, delayMs) {
+  const safeDelayMs = Math.max(0, Number(delayMs) || 0);
+  const timeoutId = setTimeout(() => {
+    gameTimeoutIds.delete(timeoutId);
+    callback();
+  }, safeDelayMs);
+  gameTimeoutIds.add(timeoutId);
+  return timeoutId;
+}
+
+function scheduleGameAt(targetGameSec, callback) {
+  const delayMs = (targetGameSec - nowGameSec()) * 1000;
+  return scheduleGameTimeout(callback, delayMs);
+}
+
+function hideCountdownOverlay() {
+  if (!countdownOverlay || !countdownText) return;
+  countdownOverlay.classList.remove('active');
+  countdownText.classList.remove('pulse', 'go');
+  countdownText.textContent = '';
+}
+
+function showCountdownCue(text, isGo = false) {
+  if (!countdownOverlay || !countdownText) return;
+  countdownOverlay.classList.add('active');
+  countdownText.textContent = text;
+  countdownText.classList.remove('pulse', 'go');
+  // Force restart animation for each cue.
+  // eslint-disable-next-line no-unused-expressions
+  countdownText.offsetWidth;
+  countdownText.classList.add('pulse');
+  if (isGo) {
+    countdownText.classList.add('go');
   }
-  if (gameTurnTimeoutId !== null) {
-    clearTimeout(gameTurnTimeoutId);
-    gameTurnTimeoutId = null;
+}
+
+function scheduleCountdown(targetStartSec, label, sessionId) {
+  [3, 2, 1].forEach((count) => {
+    scheduleGameAt(targetStartSec - (count * beatSec()), () => {
+      if (!gameActive || sessionId !== gameSessionId) return;
+      statusEl.textContent = `${label} in ${count}...`;
+      showCountdownCue(String(count));
+    });
+  });
+
+  scheduleGameAt(targetStartSec, () => {
+    if (!gameActive || sessionId !== gameSessionId) return;
+    statusEl.textContent = `${label}: GO`;
+    showCountdownCue('GO', true);
+  });
+
+  scheduleGameAt(targetStartSec + (beatSec() * 0.7), () => {
+    if (!gameActive || sessionId !== gameSessionId) return;
+    hideCountdownOverlay();
+  });
+}
+
+function ensureMetronomeInstruments() {
+  if (!metronomeKick) {
+    metronomeKick = new Tone.MembraneSynth({
+      pitchDecay: 0.03,
+      octaves: 4,
+      envelope: {
+        attack: 0.001,
+        decay: 0.22,
+        sustain: 0
+      }
+    }).toDestination();
   }
+
+  if (!metronomeSnare) {
+    metronomeSnare = new Tone.NoiseSynth({
+      noise: { type: 'white' },
+      envelope: {
+        attack: 0.001,
+        decay: 0.16,
+        sustain: 0
+      }
+    }).toDestination();
+  }
+
+  if (!metronomeHat) {
+    metronomeHat = new Tone.MetalSynth({
+      frequency: 270,
+      envelope: {
+        attack: 0.001,
+        decay: 0.08,
+        release: 0.02
+      },
+      harmonicity: 4.1,
+      modulationIndex: 18,
+      resonance: 1200
+    }).toDestination();
+  }
+}
+
+function playMetronomeBeat(beatIndex) {
+  const beatInBar = beatIndex % GAME_BEATS_PER_BAR;
+
+  if (metronomeHat) {
+    metronomeHat.triggerAttackRelease('16n', undefined, beatInBar === 0 ? 0.24 : 0.16);
+  }
+  if (metronomeKick && (beatInBar === 0 || beatInBar === 2)) {
+    metronomeKick.triggerAttackRelease('C1', '8n', undefined, beatInBar === 0 ? 0.62 : 0.5);
+  }
+  if (metronomeSnare && (beatInBar === 1 || beatInBar === 3)) {
+    metronomeSnare.triggerAttackRelease('16n', undefined, 0.28);
+  }
+}
+
+function scheduleNextMetronomeBeat(sessionId) {
+  if (!gameActive || sessionId !== gameSessionId) return;
+  const targetBeatIndex = metronomeBeatIndex;
+  const beatTimeSec = targetBeatIndex * beatSec();
+  scheduleGameAt(beatTimeSec, () => {
+    if (!gameActive || sessionId !== gameSessionId) return;
+    playMetronomeBeat(targetBeatIndex);
+    metronomeBeatIndex = targetBeatIndex + 1;
+    scheduleNextMetronomeBeat(sessionId);
+  });
+}
+
+function startGameMetronome(sessionId) {
+  ensureMetronomeInstruments();
+  metronomeBeatIndex = Math.max(0, Math.floor(nowGameSec() / beatSec()));
+  scheduleNextMetronomeBeat(sessionId);
+}
+
+function stopGameMetronome() {
+  // Beat scheduling is canceled via clearTrackedGameTimeouts().
+  // Drum voices are one-shots so no sustained release handling is needed here.
 }
 
 async function processEventsThroughEngine(inputEvents, options = {}) {
@@ -1205,7 +1498,10 @@ async function processEventsThroughEngine(inputEvents, options = {}) {
   return result;
 }
 
-function playEvents(eventsToPlay, { logSymbols = true, useAISynth = false } = {}) {
+function playEvents(
+  eventsToPlay,
+  { logSymbols = true, useAISynth = false, shouldAbort = null } = {}
+) {
   return new Promise((resolve) => {
     if (!Array.isArray(eventsToPlay) || eventsToPlay.length === 0) {
       resolve();
@@ -1213,15 +1509,28 @@ function playEvents(eventsToPlay, { logSymbols = true, useAISynth = false } = {}
     }
 
     const playbackSynth = useAISynth && aiSynth ? aiSynth : synth;
+    const abortRequested = () => typeof shouldAbort === 'function' && shouldAbort();
+    let finished = false;
     let eventIndex = 0;
 
+    const finishPlayback = () => {
+      if (finished) return;
+      finished = true;
+      if (playbackSynth) playbackSynth.releaseAll();
+      keyboardEl.querySelectorAll('.key').forEach(k => {
+        k.style.filter = '';
+      });
+      resolve();
+    };
+
     const playEvent = () => {
+      if (abortRequested()) {
+        finishPlayback();
+        return;
+      }
+
       if (eventIndex >= eventsToPlay.length) {
-        if (playbackSynth) playbackSynth.releaseAll();
-        keyboardEl.querySelectorAll('.key').forEach(k => {
-          k.style.filter = '';
-        });
-        resolve();
+        finishPlayback();
         return;
       }
 
@@ -1278,7 +1587,20 @@ async function startGameLoop() {
     selectedEngine = 'godzilla_continue';
   }
 
+  if (recording) {
+    stopRecord();
+  }
+
+  gameSessionId += 1;
+  const sessionId = gameSessionId;
   gameActive = true;
+  gamePhase = 'starting';
+  gameCaptureActive = false;
+  gameCapturedEvents = [];
+  gameCaptureActiveNotes.clear();
+  hideCountdownOverlay();
+  clearTrackedGameTimeouts();
+  gameClockOriginSec = nowSec();
   gameTurn = 0;
   gameStartBtn.disabled = true;
   gameStopBtn.disabled = false;
@@ -1291,15 +1613,18 @@ async function startGameLoop() {
   logToTerminal('', '');
   logToTerminal('🎮 CALL & RESPONSE GAME STARTED', 'timestamp');
   logToTerminal(
-    `Flow: ${USER_TURN_LIMIT_SEC}s call, AI response, repeat until you stop.`,
+    `Tempo locked at ${GAME_BPM} BPM, beat grid 4/4, AI quantize 16th notes.`,
+    'timestamp'
+  );
+  logToTerminal(
+    `Bars: user=${getSelectedUserBars()} | ai=${getSelectedAIBars()} (adjust anytime).`,
     'timestamp'
   );
   const stylePreset = getSelectedStylePreset();
   const modePreset = getSelectedResponseMode();
-  const lengthPreset = getSelectedResponseLengthPreset();
   const decodingPreset = getSelectedDecodingOptions();
   logToTerminal(
-    `AI mode: ${modePreset.label} | length: ${lengthPreset.label} | style: ${stylePreset.label}`,
+    `AI mode: ${modePreset.label} | style: ${stylePreset.label}`,
     'timestamp'
   );
   logToTerminal(
@@ -1308,11 +1633,19 @@ async function startGameLoop() {
   );
   logToTerminal('', '');
 
-  await startUserTurn();
+  startGameMetronome(sessionId);
+  scheduleUserTurn(sessionId);
 }
 
 function stopGameLoop(reason = 'Game stopped') {
-  clearGameTimers();
+  gameSessionId += 1;
+  clearTrackedGameTimeouts();
+  hideCountdownOverlay();
+  stopGameMetronome();
+  gamePhase = 'idle';
+  gameCaptureActive = false;
+  gameCapturedEvents = [];
+  gameCaptureActiveNotes.clear();
   if (recording) {
     stopRecord();
   }
@@ -1332,82 +1665,120 @@ function stopGameLoop(reason = 'Game stopped') {
   logToTerminal(`🎮 ${reason}`, 'timestamp');
 }
 
-async function startUserTurn() {
-  if (!gameActive) return;
-  clearGameTimers();
-
-  gameTurn += 1;
-  beginRecord();
-  gameStartBtn.disabled = true;
-  gameStopBtn.disabled = false;
-  recordBtn.disabled = true;
-  stopBtn.disabled = true;
-  playbackBtn.disabled = true;
-  saveBtn.disabled = true;
-
-  let remaining = USER_TURN_LIMIT_SEC;
-  statusEl.textContent = `Turn ${gameTurn}: your call (${remaining}s)`;
-  logToTerminal(`Turn ${gameTurn}: your call starts now`, 'timestamp');
-
-  gameTurnTimerId = setInterval(() => {
-    if (!gameActive) return;
-    remaining -= 1;
-    if (remaining > 0) {
-      statusEl.textContent = `Turn ${gameTurn}: your call (${remaining}s)`;
-    }
-  }, 1000);
-
-  gameTurnTimeoutId = setTimeout(() => {
-    void finishUserTurn();
-  }, USER_TURN_LIMIT_SEC * 1000);
+function beginUserCaptureWindow(sessionId, userBars) {
+  if (!gameActive || sessionId !== gameSessionId) return;
+  gamePhase = 'user_turn';
+  gameCaptureActive = true;
+  gameCaptureStartWallSec = nowSec();
+  gameCapturedEvents = [];
+  gameCaptureActiveNotes.clear();
+  statusEl.textContent = `Turn ${gameTurn}: your call (${userBars} bar${userBars > 1 ? 's' : ''})`;
+  logToTerminal(`Turn ${gameTurn}: your call started`, 'timestamp');
 }
 
-async function finishUserTurn() {
-  if (!gameActive) return;
-  clearGameTimers();
-  if (recording) stopRecord();
-  recordBtn.disabled = true;
-  stopBtn.disabled = true;
-  playbackBtn.disabled = true;
-  saveBtn.disabled = true;
+function finalizeOpenGameCaptureNotes(captureDurationSec) {
+  if (gameCaptureActiveNotes.size === 0) return;
+  const closeTime = Math.max(0, captureDurationSec);
+  gameCaptureActiveNotes.forEach((note) => {
+    gameCapturedEvents.push({
+      type: 'note_off',
+      note,
+      velocity: 0,
+      time: closeTime,
+      channel: 0
+    });
+  });
+  gameCaptureActiveNotes.clear();
+}
 
-  const callEvents = [...events];
+function scheduleUserTurn(sessionId) {
+  if (!gameActive || sessionId !== gameSessionId) return;
+  gameTurn += 1;
+  const userBars = getSelectedUserBars();
+  const userStartSec = nextBarAlignedStart(GAME_COUNTIN_BEATS);
+  const userEndSec = userStartSec + barsToSeconds(userBars);
+
+  gamePhase = 'user_countdown';
+  logToTerminal(
+    `Turn ${gameTurn}: user countdown (${userBars} bar${userBars > 1 ? 's' : ''})`,
+    'timestamp'
+  );
+  scheduleCountdown(userStartSec, `Turn ${gameTurn}: your turn`, sessionId);
+
+  scheduleGameAt(userStartSec, () => beginUserCaptureWindow(sessionId, userBars));
+  scheduleGameAt(userEndSec, () => {
+    void finishUserTurn(sessionId);
+  });
+}
+
+async function finishUserTurn(sessionId) {
+  if (!gameActive || sessionId !== gameSessionId) return;
+  const captureDurationSec = Math.max(0, nowSec() - gameCaptureStartWallSec);
+  finalizeOpenGameCaptureNotes(captureDurationSec);
+  gameCaptureActive = false;
+  const callEvents = normalizeEventsToZero(gameCapturedEvents);
+  gameCapturedEvents = [];
+
   if (callEvents.length === 0) {
     statusEl.textContent = `Turn ${gameTurn}: no notes, try again`;
     logToTerminal('No notes captured, restarting your turn...', 'timestamp');
-    setTimeout(() => {
-      void startUserTurn();
-    }, GAME_NEXT_TURN_DELAY_MS);
+    scheduleGameTimeout(() => {
+      scheduleUserTurn(sessionId);
+    }, GAME_RETRY_DELAY_MS);
     return;
   }
 
   try {
+    gamePhase = 'ai_thinking';
     statusEl.textContent = `Turn ${gameTurn}: AI thinking...`;
     logToTerminal(`Turn ${gameTurn}: AI is thinking...`, 'timestamp');
 
-    const lengthPreset = getSelectedResponseLengthPreset();
-    const promptEvents = normalizeEventsToZero(callEvents);
+    const aiBars = getSelectedAIBars();
     const decodingOptions = getSelectedDecodingOptions();
-    const result = await processEventsThroughEngine(promptEvents, {
-      generate_tokens: lengthPreset.generateTokens,
+    const result = await processEventsThroughEngine(callEvents, {
+      generate_tokens: getGameGenerateTokens(aiBars),
       ...decodingOptions
     });
-    const processedResponse = buildProcessedAIResponse(result.events || [], callEvents);
-    const aiEvents = processedResponse.events;
+    const processedResponse = buildGameProcessedAIResponse(result.events || [], callEvents, aiBars);
+    const aiEvents = quantizeAiResponseForGame(processedResponse.events, aiBars);
 
-    if (!gameActive) return;
+    if (!gameActive || sessionId !== gameSessionId) return;
+    if (aiEvents.length === 0) {
+      logToTerminal('AI returned no playable events after quantization. Restarting turn.', 'timestamp');
+      scheduleUserTurn(sessionId);
+      return;
+    }
 
-    statusEl.textContent = `Turn ${gameTurn}: AI responds`;
+    const aiStartSec = nextBarAlignedStart(GAME_COUNTIN_BEATS);
+    gamePhase = 'ai_countdown';
     logToTerminal(
-      `Turn ${gameTurn}: AI response (${processedResponse.label})`,
+      `Turn ${gameTurn}: AI countdown (${aiBars} bar${aiBars > 1 ? 's' : ''})`,
       'timestamp'
     );
-    await playEvents(aiEvents, { useAISynth: true });
+    scheduleCountdown(aiStartSec, `Turn ${gameTurn}: AI`, sessionId);
 
-    if (!gameActive) return;
-    setTimeout(() => {
-      void startUserTurn();
-    }, GAME_NEXT_TURN_DELAY_MS);
+    scheduleGameAt(aiStartSec, async () => {
+      if (!gameActive || sessionId !== gameSessionId) return;
+      gamePhase = 'ai_playback';
+      statusEl.textContent = `Turn ${gameTurn}: AI responds`;
+      logToTerminal(
+        `Turn ${gameTurn}: AI response (${processedResponse.label}, ${aiBars} bar${aiBars > 1 ? 's' : ''})`,
+        'timestamp'
+      );
+      await playEvents(aiEvents, {
+        useAISynth: true,
+        shouldAbort: () => !gameActive || sessionId !== gameSessionId
+      });
+
+      if (!gameActive || sessionId !== gameSessionId) return;
+      scheduleUserTurn(sessionId);
+    });
+
+    if (!gameActive || sessionId !== gameSessionId) return;
+    logToTerminal(
+      `Turn ${gameTurn}: AI ready (${processedResponse.label})`,
+      'timestamp'
+    );
   } catch (err) {
     console.error('Game turn error:', err);
     logToTerminal(`ENGINE ERROR: ${err.message}`, 'timestamp');
@@ -1538,7 +1909,27 @@ function bindUIEventListeners() {
         const preset = getSelectedResponseLengthPreset();
         return { label: `${preset.label} (${preset.generateTokens} tokens)` };
       },
-      message: (result) => `Response length switched to: ${result.label}`
+      message: (result) => (
+        gameActive
+          ? `Response length switched to: ${result.label} (game mode uses bar controls)`
+          : `Response length switched to: ${result.label}`
+      )
+    },
+    {
+      element: userBarsSelect,
+      getter: () => {
+        const bars = getSelectedUserBars();
+        return { label: `${bars} bar${bars > 1 ? 's' : ''}` };
+      },
+      message: (result) => `Game user bars switched to: ${result.label}`
+    },
+    {
+      element: aiBarsSelect,
+      getter: () => {
+        const bars = getSelectedAIBars();
+        return { label: `${bars} bar${bars > 1 ? 's' : ''}` };
+      },
+      message: (result) => `Game AI bars switched to: ${result.label}`
     }
   ];
 
@@ -1559,6 +1950,8 @@ function bindUIEventListeners() {
       'aiStyle': 'AI Style',
       'responseMode': 'Response Mode',
       'responseLength': 'Response Length',
+      'userBars': 'User Bars',
+      'aiBars': 'AI Bars',
       'instrument': 'Instrument',
       'aiVoice': 'AI Voice'
     };
@@ -1578,7 +1971,7 @@ function bindUIEventListeners() {
       const controlId = label.getAttribute('data-control-id');
       const controlName = controlIdToName[controlId] || controlId;
       const description = select.getAttribute('data-description');
-      const showOption = ['engine', 'runtime', 'aiStyle', 'responseMode', 'responseLength'].includes(controlId);
+      const showOption = ['engine', 'runtime', 'aiStyle', 'responseMode', 'responseLength', 'userBars', 'aiBars'].includes(controlId);
       
       const updateDisplay = () => {
         if (showOption) {
@@ -1715,6 +2108,12 @@ async function init() {
   if (runtimeSelect && !runtimeSelect.value) {
     runtimeSelect.value = 'auto';
   }
+  if (userBarsSelect && !userBarsSelect.value) {
+    userBarsSelect.value = '2';
+  }
+  if (aiBarsSelect && !aiBarsSelect.value) {
+    aiBarsSelect.value = '2';
+  }
   if (aiInstrumentSelect && !aiInstrumentSelect.value) {
     aiInstrumentSelect.value = 'fm';
   }
@@ -1729,6 +2128,7 @@ async function init() {
   const runtimeMode = getSelectedRuntime();
   const runtimeLabel = runtimeMode === 'gpu' ? 'ZeroGPU' : (runtimeMode === 'auto' ? 'Auto (GPU->CPU)' : 'CPU');
   logToTerminal(`Runtime mode: ${runtimeLabel}`, 'timestamp');
+  logToTerminal(`Game mode tempo: ${GAME_BPM} BPM (fixed)`, 'timestamp');
   // Set initial button states
   recordBtn.disabled = false;
   stopBtn.disabled = true;
