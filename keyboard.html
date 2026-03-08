@@ -74,7 +74,7 @@
         </div>
 
         <div class="controls card">
-          <div class="control-grid">
+          <div class="control-grid primary-control-grid">
             <label class="control-item" data-control-id="instrument">
               Instrument
               <select id="instrumentSelect" data-description="Choose the synth sound for your keyboard">
@@ -98,61 +98,6 @@
                 <option value="fm" selected data-tooltip="Complex, bell-like FM synthesis">FM Synth</option>
               </select>
             </label>
-            
-            <label class="control-item" data-control-id="engine">
-              Engine
-              <select id="engineSelect" data-description="Your generation model">
-                <option value="parrot" data-tooltip="Repeats your exact melody — useful for practicing or creating canon patterns">Parrot</option>
-                <option value="reverse_parrot" data-tooltip="Plays your melody backward — creates mirror images and harmonic inversions">Reverse Parrot</option>
-                <option value="godzilla_continue" data-tooltip="MIDI transformer that generates new musical continuations">Godzilla</option>
-              </select>
-            </label>
-
-            <label class="control-item" id="runtimeControl" data-control-id="runtime">
-              Runtime
-              <select id="runtimeSelect" data-description="Choose where the AI runs for faster or more reliable performance">
-                <option value="cpu" data-tooltip="Slower but always available, runs on CPU">CPU</option>
-                <option value="gpu" data-tooltip="Faster when available, uses ZeroGPU for inference">ZeroGPU</option>
-                <option value="auto" data-tooltip="Automatically prefers GPU if available, falls back to CPU" selected>Auto (GPU then CPU)</option>
-              </select>
-            </label>
-
-            <label class="control-item" data-control-id="aiStyle">
-              AI Style
-              <select id="responseStyleSelect" data-description="Applies post-processing styling to shape the AI's melodic character">
-                <option value="melodic" data-tooltip="Smooth, singable melodies with minimal pitch leaps">Melodic</option>
-                <option value="motif_echo" data-tooltip="Echoes the first couple notes from your input at the end of the response">Motif Echo</option>
-                <option value="playful" data-tooltip="Bouncy alternating pitch shifts for a whimsical, playful character">Playful</option>
-              </select>
-            </label>
-
-            <label class="control-item" data-control-id="responseMode">
-              Response Mode
-              <select id="responseModeSelect" data-description="Processing pipeline & creativity level">
-                <option value="raw_godzilla" data-tooltip="Pure AI output, maximum creativity (temperature=1.0, unpredictable)" selected>Raw Godzilla</option>
-                <option value="current_pipeline" data-tooltip="Balanced mode with AI Style applied, moderate creativity (temperature=0.9)">Current Pipeline</option>
-                <option value="musical_polish" data-tooltip="Refined with scale quantization and rhythm adjustment (temperature=0.85)">Musical Polish</option>
-              </select>
-            </label>
-
-            <label class="control-item" data-control-id="responseLength">
-              Response Length
-              <select id="responseLengthSelect" data-description="How many notes the AI generates in each response">
-                <option value="short" data-tooltip="8 notes - quick, snappy responses" selected>Short</option>
-                <option value="medium" data-tooltip="14 notes - balanced response length">Medium</option>
-                <option value="long" data-tooltip="20 notes - longer, more developed phrases">Long</option>
-                <option value="extended" data-tooltip="28 notes - extended musical conversations">Extended</option>
-              </select>
-            </label>
-
-            <label class="control-item" data-control-id="quantization">
-              AI Quantization
-              <select id="quantizationSelect" data-description="Quantization grid applied to AI notes during game mode playback">
-                <option value="sixteenth" data-tooltip="Quantize AI starts/ends to 16th-note timing" selected>16th Notes</option>
-                <option value="eighth" data-tooltip="Quantize AI starts/ends to 8th-note timing">8th Notes</option>
-                <option value="none" data-tooltip="Keep AI timing unquantized (still clamped to bar length)">No Quantization</option>
-              </select>
-            </label>
 
             <label class="control-item" data-control-id="userBars">
               User Bars
@@ -170,6 +115,68 @@
               </select>
             </label>
           </div>
+
+          <details class="advanced-settings">
+            <summary>Advanced Settings</summary>
+            <div class="advanced-settings-body">
+              <div class="control-grid advanced-control-grid">
+                <label class="control-item" data-control-id="engine">
+                  Engine
+                  <select id="engineSelect" data-description="Your generation model">
+                    <option value="parrot" data-tooltip="Repeats your exact melody — useful for practicing or creating canon patterns">Parrot</option>
+                    <option value="reverse_parrot" data-tooltip="Plays your melody backward — creates mirror images and harmonic inversions">Reverse Parrot</option>
+                    <option value="godzilla_continue" data-tooltip="MIDI transformer that generates new musical continuations">Godzilla</option>
+                  </select>
+                </label>
+
+                <label class="control-item" id="runtimeControl" data-control-id="runtime">
+                  Runtime
+                  <select id="runtimeSelect" data-description="Choose where the AI runs for faster or more reliable performance">
+                    <option value="cpu" data-tooltip="Slower but always available, runs on CPU">CPU</option>
+                    <option value="gpu" data-tooltip="Faster when available, uses ZeroGPU for inference">ZeroGPU</option>
+                    <option value="auto" data-tooltip="Automatically prefers GPU if available, falls back to CPU" selected>Auto (GPU then CPU)</option>
+                  </select>
+                </label>
+
+                <label class="control-item" data-control-id="aiStyle">
+                  AI Style
+                  <select id="responseStyleSelect" data-description="Applies post-processing styling to shape the AI's melodic character">
+                    <option value="melodic" data-tooltip="Smooth, singable melodies with minimal pitch leaps">Melodic</option>
+                    <option value="motif_echo" data-tooltip="Echoes the first couple notes from your input at the end of the response">Motif Echo</option>
+                    <option value="playful" data-tooltip="Bouncy alternating pitch shifts for a whimsical, playful character">Playful</option>
+                  </select>
+                </label>
+
+                <label class="control-item" data-control-id="responseMode">
+                  Response Mode
+                  <select id="responseModeSelect" data-description="Processing pipeline & creativity level">
+                    <option value="raw_godzilla" data-tooltip="Pure AI output, maximum creativity (temperature=1.0, unpredictable)" selected>Raw Godzilla</option>
+                    <option value="current_pipeline" data-tooltip="Balanced mode with AI Style applied, moderate creativity (temperature=0.9)">Current Pipeline</option>
+                    <option value="musical_polish" data-tooltip="Refined with scale quantization and rhythm adjustment (temperature=0.85)">Musical Polish</option>
+                  </select>
+                </label>
+
+                <label class="control-item" data-control-id="responseLength">
+                  Response Length
+                  <select id="responseLengthSelect" data-description="How many notes the AI generates in each response">
+                    <option value="short" data-tooltip="8 notes - quick, snappy responses" selected>Short</option>
+                    <option value="medium" data-tooltip="14 notes - balanced response length">Medium</option>
+                    <option value="long" data-tooltip="20 notes - longer, more developed phrases">Long</option>
+                    <option value="extended" data-tooltip="28 notes - extended musical conversations">Extended</option>
+                  </select>
+                </label>
+
+                <label class="control-item" data-control-id="quantization">
+                  AI Quantization
+                  <select id="quantizationSelect" data-description="Quantization grid applied to AI notes during game mode playback">
+                    <option value="sixteenth" data-tooltip="Quantize AI starts/ends to 16th-note timing" selected>16th Notes</option>
+                    <option value="eighth" data-tooltip="Quantize AI starts/ends to 8th-note timing">8th Notes</option>
+                    <option value="none" data-tooltip="Keep AI timing unquantized (still clamped to bar length)">No Quantization</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </details>
 
           <div class="action-row">
             <div class="btn-tooltip-wrapper">

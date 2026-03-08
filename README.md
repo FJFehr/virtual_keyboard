@@ -99,10 +99,8 @@ JavaScript plays result through Tone.js synth
 3. **Godzilla**: AI generates musical continuations using transformer model
 
 ### UI Features
-- **Engine selector**: Choose processing method
-- **Style selector**: AI style (melodic, energetic, ornate, etc.)
-- **Response mode**: Control AI generation behavior
-- **Runtime selector**: GPU (fast) vs CPU (reliable)
+- **Default controls**: Instrument, AI voice, User Bars, AI Bars stay visible
+- **Advanced Settings**: Engine, runtime, response mode/style, response length, and AI quantization
 - **User Bars / AI Bars**: Independent 1- or 2-bar turn lengths in game mode
 - **Instrument selector**: Change synth sound
 - **AI voice selector**: Change AI synth sound
