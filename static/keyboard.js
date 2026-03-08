@@ -788,10 +788,10 @@ function getSelectedResponseLengthPreset() {
 }
 
 function getSelectedGameQuantization() {
-  const modeId = quantizationSelect ? quantizationSelect.value : 'sixteenth';
+  const modeId = quantizationSelect ? quantizationSelect.value : 'eighth';
   return {
     modeId,
-    ...(GAME_QUANTIZATION_PRESETS[modeId] || GAME_QUANTIZATION_PRESETS.sixteenth)
+    ...(GAME_QUANTIZATION_PRESETS[modeId] || GAME_QUANTIZATION_PRESETS.eighth)
   };
 }
 
@@ -2649,7 +2649,7 @@ async function init() {
     responseLengthSelect.value = 'short';
   }
   if (quantizationSelect && !quantizationSelect.value) {
-    quantizationSelect.value = 'sixteenth';
+    quantizationSelect.value = 'eighth';
   }
   if (runtimeSelect && !runtimeSelect.value) {
     runtimeSelect.value = 'auto';
