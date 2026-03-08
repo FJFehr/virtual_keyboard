@@ -114,7 +114,7 @@ JavaScript plays result through Tone.js synth
 - **Count-in**: Animated `3, 2, 1, GO` before user and AI turns
 - **Turn windows**: User and AI each use independently selected bar lengths (1 or 2)
 - **Fast game inference**: Game mode uses a fixed `32` generation tokens for quicker AI response
-- **Quantized AI playback**: AI response is stretched to the selected AI bar window, then quantized to a 16th-note grid
+- **Quantized AI playback**: AI response is stretched to the selected AI bar window, with selectable quantization (`16th`, `8th`, or `none`)
 - **Loop behavior**: Empty user turns automatically retry after a fresh count-in; loop continues until Stop Game
 
 ---

@@ -145,6 +145,15 @@
               </select>
             </label>
 
+            <label class="control-item" data-control-id="quantization">
+              AI Quantization
+              <select id="quantizationSelect" data-description="Quantization grid applied to AI notes during game mode playback">
+                <option value="sixteenth" data-tooltip="Quantize AI starts/ends to 16th-note timing" selected>16th Notes</option>
+                <option value="eighth" data-tooltip="Quantize AI starts/ends to 8th-note timing">8th Notes</option>
+                <option value="none" data-tooltip="Keep AI timing unquantized (still clamped to bar length)">No Quantization</option>
+              </select>
+            </label>
+
             <label class="control-item" data-control-id="userBars">
               User Bars
               <select id="userBarsSelect" data-description="Bars available for your call during game mode">

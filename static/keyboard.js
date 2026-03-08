@@ -82,6 +82,7 @@ let runtimeSelect = null;
 let responseStyleSelect = null;
 let responseModeSelect = null;
 let responseLengthSelect = null;
+let quantizationSelect = null;
 let userBarsSelect = null;
 let aiBarsSelect = null;
 let terminal = null;
@@ -112,7 +113,6 @@ let gameTurn = 0;
 const GAME_BPM = 75;
 const GAME_BEATS_PER_BAR = 4;
 const GAME_COUNTIN_BEATS = 3;
-const GAME_QUANT_STEP_BEATS = 0.25; // 16th-note grid
 const GAME_RETRY_DELAY_MS = 500;
 
 let gameSessionId = 0;
@@ -194,6 +194,21 @@ const RESPONSE_STYLE_PRESETS = {
     smoothLeaps: true,
     addMotifEcho: false,
     playfulShift: true
+  }
+};
+
+const GAME_QUANTIZATION_PRESETS = {
+  sixteenth: {
+    label: '16th Notes',
+    stepBeats: 0.25
+  },
+  eighth: {
+    label: '8th Notes',
+    stepBeats: 0.5
+  },
+  none: {
+    label: 'No Quantization',
+    stepBeats: null
   }
 };
 
@@ -469,6 +484,7 @@ function cacheUIElements() {
   responseStyleSelect = document.getElementById('responseStyleSelect');
   responseModeSelect = document.getElementById('responseModeSelect');
   responseLengthSelect = document.getElementById('responseLengthSelect');
+  quantizationSelect = document.getElementById('quantizationSelect');
   userBarsSelect = document.getElementById('userBarsSelect');
   aiBarsSelect = document.getElementById('aiBarsSelect');
   terminal = document.getElementById('terminal');
@@ -497,6 +513,7 @@ async function waitForKeyboardUIElements(timeoutMs = 20000) {
     'instrumentSelect',
     'engineSelect',
     'runtimeSelect',
+    'quantizationSelect',
     'userBarsSelect',
     'aiBarsSelect',
     'terminal',
@@ -768,6 +785,14 @@ function getSelectedResponseMode() {
 
 function getSelectedResponseLengthPreset() {
   return getSelectedPreset(responseLengthSelect, RESPONSE_LENGTH_PRESETS, 'short', 'lengthId');
+}
+
+function getSelectedGameQuantization() {
+  const modeId = quantizationSelect ? quantizationSelect.value : 'sixteenth';
+  return {
+    modeId,
+    ...(GAME_QUANTIZATION_PRESETS[modeId] || GAME_QUANTIZATION_PRESETS.sixteenth)
+  };
 }
 
 function getSelectedGameBars(selectElement, fallback = 2) {
@@ -1123,8 +1148,13 @@ function stretchNotePairsToDuration(pairs, targetDurationSec) {
 
 function quantizeAiResponseForGame(rawEvents, aiBars) {
   const maxDurationSec = barsToSeconds(aiBars);
-  const quantStepSec = beatSec() * GAME_QUANT_STEP_BEATS;
-  const minDurationSec = Math.max(0.08, quantStepSec * 0.5);
+  const quantPreset = getSelectedGameQuantization();
+  const quantStepSec = Number.isFinite(quantPreset.stepBeats)
+    ? beatSec() * quantPreset.stepBeats
+    : null;
+  const minDurationSec = quantStepSec
+    ? Math.max(0.08, quantStepSec * 0.5)
+    : 0.08;
 
   const rawPairs = eventsToNotePairs(normalizeEventsToZero(rawEvents));
   if (rawPairs.length === 0) {
@@ -1134,14 +1164,15 @@ function quantizeAiResponseForGame(rawEvents, aiBars) {
 
   const out = [];
   pairs.forEach((pair) => {
+    const rawStart = quantStepSec ? quantizeToStep(pair.start, quantStepSec) : pair.start;
     const quantizedStart = clampValue(
-      quantizeToStep(pair.start, quantStepSec),
+      rawStart,
       0,
       Math.max(0, maxDurationSec - minDurationSec)
     );
-    const quantizedEnd = quantizeToStep(pair.end, quantStepSec);
+    const rawEnd = quantStepSec ? quantizeToStep(pair.end, quantStepSec) : pair.end;
     const end = clampValue(
-      Math.max(quantizedStart + minDurationSec, quantizedEnd),
+      Math.max(quantizedStart + minDurationSec, rawEnd),
       quantizedStart + minDurationSec,
       maxDurationSec
     );
@@ -2055,8 +2086,9 @@ async function startGameLoop() {
 
   logToTerminal('', '');
   logToTerminal('🎮 CALL & RESPONSE GAME STARTED', 'timestamp');
+  const quantizationPreset = getSelectedGameQuantization();
   logToTerminal(
-    `Tempo locked at ${GAME_BPM} BPM, beat grid 4/4, AI quantize 16th notes.`,
+    `Tempo locked at ${GAME_BPM} BPM, beat grid 4/4, AI quantize: ${quantizationPreset.label}.`,
     'timestamp'
   );
   logToTerminal(
@@ -2410,6 +2442,11 @@ function bindUIEventListeners() {
       )
     },
     {
+      element: quantizationSelect,
+      getter: getSelectedGameQuantization,
+      message: (result) => `Game quantization switched to: ${result.label}`
+    },
+    {
       element: userBarsSelect,
       getter: () => {
         const bars = getSelectedUserBars();
@@ -2451,6 +2488,7 @@ function bindUIEventListeners() {
       'aiStyle': 'AI Style',
       'responseMode': 'Response Mode',
       'responseLength': 'Response Length',
+      'quantization': 'AI Quantization',
       'userBars': 'User Bars',
       'aiBars': 'AI Bars',
       'instrument': 'Instrument',
@@ -2472,7 +2510,7 @@ function bindUIEventListeners() {
       const controlId = label.getAttribute('data-control-id');
       const controlName = controlIdToName[controlId] || controlId;
       const description = select.getAttribute('data-description');
-      const showOption = ['engine', 'runtime', 'aiStyle', 'responseMode', 'responseLength', 'userBars', 'aiBars'].includes(controlId);
+      const showOption = ['engine', 'runtime', 'aiStyle', 'responseMode', 'responseLength', 'quantization', 'userBars', 'aiBars'].includes(controlId);
       
       const updateDisplay = () => {
         if (showOption) {
@@ -2609,6 +2647,9 @@ async function init() {
   }
   if (responseLengthSelect && !responseLengthSelect.value) {
     responseLengthSelect.value = 'short';
+  }
+  if (quantizationSelect && !quantizationSelect.value) {
+    quantizationSelect.value = 'sixteenth';
   }
   if (runtimeSelect && !runtimeSelect.value) {
     runtimeSelect.value = 'auto';
