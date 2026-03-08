@@ -17,6 +17,7 @@ from threading import Thread
 import traceback
 import gradio as gr
 from huggingface_hub import login
+import torch
 
 from config import INSTRUMENTS, KEYBOARD_KEYS, KEYBOARD_SHORTCUTS
 from midi import events_to_midbytes
@@ -51,6 +52,7 @@ def _parse_json_payload(payload_text: str | None, default):
 
 def get_config():
     """Provide frontend with instruments and keyboard layout"""
+    gpu_available = bool(torch.cuda.is_available())
     return {
         "instruments": INSTRUMENTS,
         "keyboard_keys": KEYBOARD_KEYS,
@@ -59,6 +61,10 @@ def get_config():
             {"id": engine_id, "name": EngineRegistry.get_engine_info(engine_id)["name"]}
             for engine_id in EngineRegistry.list_engines()
         ],
+        "runtime": {
+            "gpu_available": gpu_available,
+            "default_mode": "gpu" if gpu_available else "cpu",
+        },
     }
 
 def process_with_engine(

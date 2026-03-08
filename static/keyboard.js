@@ -129,6 +129,8 @@ let metronomeSnare = null;
 let metronomeHat = null;
 let gameGridUserEvents = [];
 let gameGridAIEvents = [];
+let resolvedAutoRuntimeMode = null;
+let autoRuntimeProbeInFlight = false;
 let gridAnimationFrameId = null;
 const gridPlayheads = {
   user: { active: false, startWallSec: 0, durationSec: 1 },
@@ -285,6 +287,7 @@ async function initializeFromConfig() {
 
     // Populate engine dropdown from server config
     populateEngineSelect(serverConfig.engines);
+    resetAutoRuntimeResolution();
     
     // Render keyboard after config is loaded
     buildKeyboard();
@@ -308,6 +311,7 @@ async function initializeFromConfig() {
       { id: 'reverse_parrot', name: 'Reverse Parrot' },
       { id: 'godzilla_continue', name: 'Godzilla' }
     ]);
+    resetAutoRuntimeResolution();
     buildKeyboard();
   }
 }
@@ -798,6 +802,69 @@ function getSelectedDecodingOptions() {
 function getSelectedRuntime() {
   if (!runtimeSelect || !runtimeSelect.value) return 'auto';
   return runtimeSelect.value;
+}
+
+function resetAutoRuntimeResolution() {
+  resolvedAutoRuntimeMode = null;
+}
+
+function resolveAutoRuntimeMode(engineId) {
+  if (engineId !== 'godzilla_continue') {
+    return 'cpu';
+  }
+
+  if (resolvedAutoRuntimeMode === 'cpu' || resolvedAutoRuntimeMode === 'gpu') {
+    return resolvedAutoRuntimeMode;
+  }
+
+  const runtimeInfo = serverConfig && typeof serverConfig === 'object'
+    ? serverConfig.runtime
+    : null;
+  const defaultMode = runtimeInfo && typeof runtimeInfo.default_mode === 'string'
+    ? runtimeInfo.default_mode
+    : null;
+
+  if (defaultMode === 'cpu' || defaultMode === 'gpu') {
+    resolvedAutoRuntimeMode = defaultMode;
+  } else {
+    resolvedAutoRuntimeMode = 'gpu';
+  }
+
+  const label = resolvedAutoRuntimeMode === 'gpu' ? 'ZeroGPU' : 'CPU';
+  logToTerminal(`Runtime auto resolved to ${label} and will stay fixed this session.`, 'timestamp');
+  return resolvedAutoRuntimeMode;
+}
+
+async function probeZeroGpuAvailabilityOnInit() {
+  if (getSelectedRuntime() !== 'auto') return;
+  if (autoRuntimeProbeInFlight) return;
+
+  autoRuntimeProbeInFlight = true;
+  try {
+    logToTerminal('Runtime auto: probing ZeroGPU availability...', 'timestamp');
+    const probePayload = {
+      engine_id: 'parrot',
+      events: [
+        { type: 'note_on', note: 60, velocity: 64, time: 0, channel: 0 },
+        { type: 'note_off', note: 60, velocity: 0, time: 0.1, channel: 0 }
+      ],
+      options: {}
+    };
+    const probeResult = await callGradioBridge('process_engine_gpu', probePayload);
+    if (probeResult && !probeResult.error && Array.isArray(probeResult.events)) {
+      resolvedAutoRuntimeMode = 'gpu';
+      logToTerminal('Runtime auto probe: ZeroGPU available. Auto locked to ZeroGPU.', 'timestamp');
+    } else {
+      resolvedAutoRuntimeMode = 'cpu';
+      const reason = probeResult && probeResult.error ? probeResult.error : 'unavailable';
+      logToTerminal(`Runtime auto probe: ZeroGPU unavailable (${reason}). Auto locked to CPU.`, 'timestamp');
+    }
+  } catch (err) {
+    resolvedAutoRuntimeMode = 'cpu';
+    logToTerminal(`Runtime auto probe failed (${err.message}). Auto locked to CPU.`, 'timestamp');
+  } finally {
+    autoRuntimeProbeInFlight = false;
+  }
 }
 
 function beatSec() {
@@ -1764,6 +1831,9 @@ async function processEventsThroughEngine(inputEvents, options = {}) {
 
   const requestOptions = { ...options };
   const runtimeMode = getSelectedRuntime();
+  const effectiveRuntimeMode = runtimeMode === 'auto'
+    ? resolveAutoRuntimeMode(selectedEngineId)
+    : runtimeMode;
   if (
     selectedEngineId === 'godzilla_continue'
     && typeof requestOptions.generate_tokens !== 'number'
@@ -1773,7 +1843,7 @@ async function processEventsThroughEngine(inputEvents, options = {}) {
 
   let bridgeAction = 'process_engine_cpu';
   if (selectedEngineId === 'godzilla_continue') {
-    if (runtimeMode === 'gpu' || runtimeMode === 'auto') {
+    if (effectiveRuntimeMode === 'gpu') {
       bridgeAction = 'process_engine_gpu';
     }
   }
@@ -1794,6 +1864,8 @@ async function processEventsThroughEngine(inputEvents, options = {}) {
       && bridgeAction === 'process_engine_gpu'
     ) {
       logToTerminal('Runtime auto: ZeroGPU failed, retrying on CPU.', 'timestamp');
+      resolvedAutoRuntimeMode = 'cpu';
+      logToTerminal('Runtime auto switched to CPU and will remain on CPU.', 'timestamp');
       result = await callGradioBridge('process_engine_cpu', requestPayload);
     } else {
       throw err;
@@ -1808,6 +1880,8 @@ async function processEventsThroughEngine(inputEvents, options = {}) {
     && bridgeAction === 'process_engine_gpu'
   ) {
     logToTerminal(`Runtime auto: ZeroGPU error (${result.error}), retrying on CPU.`, 'timestamp');
+    resolvedAutoRuntimeMode = 'cpu';
+    logToTerminal('Runtime auto switched to CPU and will remain on CPU.', 'timestamp');
     result = await callGradioBridge('process_engine_cpu', requestPayload);
   }
 
@@ -1907,11 +1981,6 @@ function playEvents(
 async function startGameLoop() {
   if (gameActive) return;
   await Tone.start();
-
-  if (engineSelect.querySelector('option[value="godzilla_continue"]')) {
-    engineSelect.value = 'godzilla_continue';
-    selectedEngine = 'godzilla_continue';
-  }
 
   if (recording) {
     stopRecord();
@@ -2317,6 +2386,10 @@ function bindUIEventListeners() {
     if (element) {
       element.addEventListener('change', () => {
         const result = getter();
+        if (element === runtimeSelect && getSelectedRuntime() === 'auto') {
+          resetAutoRuntimeResolution();
+          void probeZeroGpuAvailabilityOnInit();
+        }
         logToTerminal(message(result), 'timestamp');
         if (element === userBarsSelect || element === aiBarsSelect) {
           renderTurnGrid({ phase: gamePhase });
@@ -2516,6 +2589,10 @@ async function init() {
   const runtimeMode = getSelectedRuntime();
   const runtimeLabel = runtimeMode === 'gpu' ? 'ZeroGPU' : (runtimeMode === 'auto' ? 'Auto (GPU->CPU)' : 'CPU');
   logToTerminal(`Runtime mode: ${runtimeLabel}`, 'timestamp');
+  if (runtimeMode === 'auto') {
+    logToTerminal('Runtime auto probe started in background...', 'timestamp');
+    void probeZeroGpuAvailabilityOnInit();
+  }
   logToTerminal(`Game mode tempo: ${GAME_BPM} BPM (fixed)`, 'timestamp');
   // Set initial button states
   recordBtn.disabled = false;
