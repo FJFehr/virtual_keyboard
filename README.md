@@ -107,6 +107,7 @@ JavaScript plays result through Tone.js synth
 - **Instrument selector**: Change synth sound
 - **AI voice selector**: Change AI synth sound
 - **Terminal**: Real-time event logging
+- **Inference timing logs**: Runtime-specific latency logs (ZeroGPU/CPU) in terminal and backend logs
 
 ### Beat-Synced Game Mode
 - **Fixed tempo**: 75 BPM, continuous 4/4 metronome while game mode is active

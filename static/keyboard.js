@@ -804,6 +804,12 @@ function getSelectedRuntime() {
   return runtimeSelect.value;
 }
 
+function getRuntimeModeLabel(mode) {
+  if (mode === 'gpu') return 'ZeroGPU';
+  if (mode === 'auto') return 'Auto (GPU->CPU)';
+  return 'CPU';
+}
+
 function resetAutoRuntimeResolution() {
   resolvedAutoRuntimeMode = null;
 }
@@ -1829,6 +1835,7 @@ async function processEventsThroughEngine(inputEvents, options = {}) {
     return { events: inputEvents };
   }
 
+  const requestStartedMs = performance.now();
   const requestOptions = { ...options };
   const runtimeMode = getSelectedRuntime();
   const effectiveRuntimeMode = runtimeMode === 'auto'
@@ -1842,9 +1849,11 @@ async function processEventsThroughEngine(inputEvents, options = {}) {
   }
 
   let bridgeAction = 'process_engine_cpu';
+  let runtimeUsed = 'cpu';
   if (selectedEngineId === 'godzilla_continue') {
     if (effectiveRuntimeMode === 'gpu') {
       bridgeAction = 'process_engine_gpu';
+      runtimeUsed = 'gpu';
     }
   }
 
@@ -1855,18 +1864,31 @@ async function processEventsThroughEngine(inputEvents, options = {}) {
   };
 
   let result;
+  const primaryAttemptStartMs = performance.now();
   try {
     result = await callGradioBridge(bridgeAction, requestPayload);
   } catch (err) {
+    const primaryAttemptMs = performance.now() - primaryAttemptStartMs;
     if (
       selectedEngineId === 'godzilla_continue'
       && runtimeMode === 'auto'
       && bridgeAction === 'process_engine_gpu'
     ) {
-      logToTerminal('Runtime auto: ZeroGPU failed, retrying on CPU.', 'timestamp');
+      logToTerminal(
+        `Runtime auto: ZeroGPU failed after ${Math.round(primaryAttemptMs)}ms (${err.message}), retrying on CPU.`,
+        'timestamp'
+      );
       resolvedAutoRuntimeMode = 'cpu';
       logToTerminal('Runtime auto switched to CPU and will remain on CPU.', 'timestamp');
+      const cpuAttemptStartMs = performance.now();
       result = await callGradioBridge('process_engine_cpu', requestPayload);
+      runtimeUsed = 'cpu';
+      const cpuAttemptMs = performance.now() - cpuAttemptStartMs;
+      const totalMs = performance.now() - requestStartedMs;
+      logToTerminal(
+        `Inference fallback success on CPU in ${Math.round(cpuAttemptMs)}ms (total ${Math.round(totalMs)}ms).`,
+        'timestamp'
+      );
     } else {
       throw err;
     }
@@ -1879,10 +1901,22 @@ async function processEventsThroughEngine(inputEvents, options = {}) {
     && runtimeMode === 'auto'
     && bridgeAction === 'process_engine_gpu'
   ) {
-    logToTerminal(`Runtime auto: ZeroGPU error (${result.error}), retrying on CPU.`, 'timestamp');
+    const primaryAttemptMs = performance.now() - primaryAttemptStartMs;
+    logToTerminal(
+      `Runtime auto: ZeroGPU error after ${Math.round(primaryAttemptMs)}ms (${result.error}), retrying on CPU.`,
+      'timestamp'
+    );
     resolvedAutoRuntimeMode = 'cpu';
     logToTerminal('Runtime auto switched to CPU and will remain on CPU.', 'timestamp');
+    const cpuAttemptStartMs = performance.now();
     result = await callGradioBridge('process_engine_cpu', requestPayload);
+    runtimeUsed = 'cpu';
+    const cpuAttemptMs = performance.now() - cpuAttemptStartMs;
+    const totalMs = performance.now() - requestStartedMs;
+    logToTerminal(
+      `Inference fallback success on CPU in ${Math.round(cpuAttemptMs)}ms (total ${Math.round(totalMs)}ms).`,
+      'timestamp'
+    );
   }
 
   if (result && result.error) {
@@ -1893,6 +1927,17 @@ async function processEventsThroughEngine(inputEvents, options = {}) {
   }
   if (result.warning) {
     logToTerminal(`ENGINE WARNING: ${result.warning}`, 'timestamp');
+  }
+
+  if (selectedEngineId === 'godzilla_continue') {
+    const totalMs = performance.now() - requestStartedMs;
+    const tokens = Number(requestOptions.generate_tokens) || 0;
+    const inCount = Array.isArray(inputEvents) ? inputEvents.length : 0;
+    const outCount = Array.isArray(result.events) ? result.events.length : 0;
+    logToTerminal(
+      `Inference ${getRuntimeModeLabel(runtimeUsed)}: ${Math.round(totalMs)}ms | in=${inCount} ev | out=${outCount} ev | tokens=${tokens}`,
+      'timestamp'
+    );
   }
 
   return result;

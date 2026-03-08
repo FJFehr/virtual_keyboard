@@ -13,6 +13,7 @@ import base64
 import json
 import os
 import re
+import time
 from threading import Thread
 import traceback
 import gradio as gr
@@ -78,10 +79,20 @@ def process_with_engine(
     if not engine_id or not events:
         return {"error": "Missing engine_id or events"}
 
+    request_started = time.perf_counter()
     x_ip_token = (
         request.headers.get("x-ip-token")
         if request is not None and hasattr(request, "headers")
         else None
+    )
+    input_events = len(events) if isinstance(events, list) else 0
+    print(
+        "inference request started:",
+        {
+            "engine_id": engine_id,
+            "device": device,
+            "input_events": input_events,
+        },
     )
     print(
         "process_engine auth:",
@@ -93,17 +104,54 @@ def process_with_engine(
 
     try:
         engine = EngineRegistry.get_engine(engine_id)
+        infer_started = time.perf_counter()
         processed = engine.process(
             events,
             options=options,
             request=request,
             device=device,
         )
+        infer_elapsed_ms = round((time.perf_counter() - infer_started) * 1000.0, 2)
+        request_elapsed_ms = round((time.perf_counter() - request_started) * 1000.0, 2)
+        output_events = len(processed) if isinstance(processed, list) else 0
+        print(
+            "inference request finished:",
+            {
+                "engine_id": engine_id,
+                "device": device,
+                "input_events": input_events,
+                "output_events": output_events,
+                "inference_ms": infer_elapsed_ms,
+                "request_ms": request_elapsed_ms,
+            },
+        )
         return {"success": True, "events": processed}
     except ValueError as e:
+        request_elapsed_ms = round((time.perf_counter() - request_started) * 1000.0, 2)
+        print(
+            "inference request failed:",
+            {
+                "engine_id": engine_id,
+                "device": device,
+                "input_events": input_events,
+                "request_ms": request_elapsed_ms,
+                "error": str(e),
+            },
+        )
         traceback.print_exc()
         return {"error": str(e)}
     except Exception as e:
+        request_elapsed_ms = round((time.perf_counter() - request_started) * 1000.0, 2)
+        print(
+            "inference request failed:",
+            {
+                "engine_id": engine_id,
+                "device": device,
+                "input_events": input_events,
+                "request_ms": request_elapsed_ms,
+                "error": str(e),
+            },
+        )
         traceback.print_exc()
         return {"error": f"Processing error: {str(e)}"}
 
