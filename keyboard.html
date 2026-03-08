@@ -196,6 +196,29 @@
         </div>
       </div>
 
+      <div class="turn-grid-section card">
+        <div class="turn-grid-header">
+          <h4>TURN GRID</h4>
+          <span id="gridPhaseBadge">Idle</span>
+        </div>
+        <div class="turn-grid-body">
+          <div class="turn-grid-lane user-lane">
+            <div class="turn-grid-lane-header">
+              <span class="lane-label">USER</span>
+              <span id="userGridMeta" class="lane-meta">2 bars</span>
+            </div>
+            <canvas id="userGridCanvas" class="turn-grid-canvas" aria-label="User turn note grid"></canvas>
+          </div>
+          <div class="turn-grid-lane ai-lane">
+            <div class="turn-grid-lane-header">
+              <span class="lane-label">AI</span>
+              <span id="aiGridMeta" class="lane-meta">2 bars</span>
+            </div>
+            <canvas id="aiGridCanvas" class="turn-grid-canvas" aria-label="AI turn note grid"></canvas>
+          </div>
+        </div>
+      </div>
+
       <div class="monitor-section card">
         <div class="terminal-header">
           <h4>MIDI MONITOR</h4>

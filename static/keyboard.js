@@ -88,6 +88,11 @@ let terminal = null;
 let clearTerminal = null;
 let countdownOverlay = null;
 let countdownText = null;
+let userGridCanvas = null;
+let aiGridCanvas = null;
+let userGridMeta = null;
+let aiGridMeta = null;
+let gridPhaseBadge = null;
 
 // =============================================================================
 // STATE
@@ -122,6 +127,13 @@ let metronomeBeatIndex = 0;
 let metronomeKick = null;
 let metronomeSnare = null;
 let metronomeHat = null;
+let gameGridUserEvents = [];
+let gameGridAIEvents = [];
+let gridAnimationFrameId = null;
+const gridPlayheads = {
+  user: { active: false, startWallSec: 0, durationSec: 1 },
+  ai: { active: false, startWallSec: 0, durationSec: 1 }
+};
 
 const RESPONSE_MODES = {
   raw_godzilla: { label: 'Raw Godzilla' },
@@ -459,6 +471,11 @@ function cacheUIElements() {
   clearTerminal = document.getElementById('clearTerminal');
   countdownOverlay = document.getElementById('countdownOverlay');
   countdownText = document.getElementById('countdownText');
+  userGridCanvas = document.getElementById('userGridCanvas');
+  aiGridCanvas = document.getElementById('aiGridCanvas');
+  userGridMeta = document.getElementById('userGridMeta');
+  aiGridMeta = document.getElementById('aiGridMeta');
+  gridPhaseBadge = document.getElementById('gridPhaseBadge');
 }
 
 async function waitForKeyboardUIElements(timeoutMs = 20000) {
@@ -481,7 +498,12 @@ async function waitForKeyboardUIElements(timeoutMs = 20000) {
     'terminal',
     'clearTerminal',
     'countdownOverlay',
-    'countdownText'
+    'countdownText',
+    'userGridCanvas',
+    'aiGridCanvas',
+    'userGridMeta',
+    'aiGridMeta',
+    'gridPhaseBadge'
   ];
 
   const started = Date.now();
@@ -556,7 +578,7 @@ function sortEventsChronologically(eventsToSort) {
   });
 }
 
-function normalizeEventsToZero(rawEvents) {
+function sanitizeEvents(rawEvents) {
   if (!Array.isArray(rawEvents) || rawEvents.length === 0) {
     return [];
   }
@@ -571,6 +593,15 @@ function normalizeEventsToZero(rawEvents) {
       channel: Number(e.channel) || 0
     }));
 
+  if (cleaned.length === 0) {
+    return [];
+  }
+
+  return sortEventsChronologically(cleaned);
+}
+
+function normalizeEventsToZero(rawEvents) {
+  const cleaned = sanitizeEvents(rawEvents);
   if (cleaned.length === 0) {
     return [];
   }
@@ -1061,6 +1092,263 @@ function getGameGenerateTokens() {
   return 32;
 }
 
+function getGridPhaseLabel(phase) {
+  const labels = {
+    idle: 'Idle',
+    starting: 'Starting',
+    user_countdown: 'User Count-In',
+    user_turn: 'User Turn',
+    ai_thinking: 'AI Thinking',
+    ai_countdown: 'AI Count-In',
+    ai_playback: 'AI Playback'
+  };
+  return labels[phase] || 'Idle';
+}
+
+function prepareCanvasContext(canvas) {
+  if (!canvas) return null;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const dpr = window.devicePixelRatio || 1;
+  const width = Math.max(1, Math.floor(canvas.clientWidth * dpr));
+  const height = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+
+function getGridPairs(eventsInput, maxDurationSec) {
+  const pairs = eventsToNotePairs(sanitizeEvents(eventsInput));
+  const maxDur = Math.max(0.1, Number(maxDurationSec) || 0.1);
+  return pairs
+    .filter(pair => pair.start < maxDur)
+    .map(pair => ({
+      ...pair,
+      start: Math.max(0, pair.start),
+      end: Math.max(pair.start + 0.05, Math.min(pair.end, maxDur))
+    }));
+}
+
+function shouldAnimateGrid() {
+  return gridPlayheads.user.active || gridPlayheads.ai.active;
+}
+
+function stopGridAnimationLoop() {
+  if (gridAnimationFrameId !== null) {
+    window.cancelAnimationFrame(gridAnimationFrameId);
+    gridAnimationFrameId = null;
+  }
+}
+
+function stopGridPlayhead(lane) {
+  if (!gridPlayheads[lane]) return;
+  gridPlayheads[lane].active = false;
+  if (!shouldAnimateGrid()) {
+    stopGridAnimationLoop();
+  }
+}
+
+function stopAllGridPlayheads() {
+  stopGridPlayhead('user');
+  stopGridPlayhead('ai');
+}
+
+function readGridPlayheadSec(lane) {
+  const state = gridPlayheads[lane];
+  if (!state || !state.active) return null;
+
+  const elapsed = Math.max(0, nowSec() - state.startWallSec);
+  if (elapsed >= state.durationSec) {
+    state.active = false;
+    return state.durationSec;
+  }
+  return elapsed;
+}
+
+function runGridAnimationFrame() {
+  if (!shouldAnimateGrid()) {
+    gridAnimationFrameId = null;
+    return;
+  }
+  renderTurnGrid({ phase: gamePhase });
+  gridAnimationFrameId = window.requestAnimationFrame(runGridAnimationFrame);
+}
+
+function ensureGridAnimationLoop() {
+  if (gridAnimationFrameId !== null) return;
+  gridAnimationFrameId = window.requestAnimationFrame(runGridAnimationFrame);
+}
+
+function startGridPlayhead(lane, durationSec) {
+  if (!gridPlayheads[lane]) return;
+  gridPlayheads[lane].active = true;
+  gridPlayheads[lane].startWallSec = nowSec();
+  gridPlayheads[lane].durationSec = Math.max(0.1, Number(durationSec) || 0.1);
+  ensureGridAnimationLoop();
+}
+
+function getEventsDurationSec(eventsInput) {
+  if (!Array.isArray(eventsInput) || eventsInput.length === 0) {
+    return 0.1;
+  }
+  return Math.max(
+    0.1,
+    ...eventsInput.map(event => Math.max(0, Number(event.time) || 0))
+  );
+}
+
+function drawTurnGridLane(canvas, eventsInput, bars, laneType = 'user', playheadSec = null) {
+  const ctx = prepareCanvasContext(canvas);
+  if (!ctx) return;
+
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  const padX = 8;
+  const padY = 8;
+  const innerW = Math.max(1, width - (padX * 2));
+  const innerH = Math.max(1, height - (padY * 2));
+  const rows = numOctaves * 12;
+  const totalBars = Math.max(1, bars);
+  const totalSixteenths = totalBars * 16;
+  const maxDurationSec = barsToSeconds(totalBars);
+  const rowH = innerH / rows;
+
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
+  if (laneType === 'ai') {
+    bgGrad.addColorStop(0, 'rgba(31, 10, 48, 0.95)');
+    bgGrad.addColorStop(1, 'rgba(8, 4, 18, 0.98)');
+  } else {
+    bgGrad.addColorStop(0, 'rgba(8, 16, 42, 0.95)');
+    bgGrad.addColorStop(1, 'rgba(5, 5, 18, 0.98)');
+  }
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  for (let row = 0; row <= rows; row++) {
+    const y = padY + (row * rowH);
+    ctx.strokeStyle = row % 12 === 0
+      ? 'rgba(62, 244, 255, 0.2)'
+      : 'rgba(62, 244, 255, 0.07)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padX, y);
+    ctx.lineTo(padX + innerW, y);
+    ctx.stroke();
+  }
+
+  for (let step = 0; step <= totalSixteenths; step++) {
+    const x = padX + ((step / totalSixteenths) * innerW);
+    if (step % 16 === 0) {
+      ctx.strokeStyle = laneType === 'ai'
+        ? 'rgba(255, 63, 176, 0.58)'
+        : 'rgba(62, 244, 255, 0.58)';
+      ctx.lineWidth = 1.4;
+    } else if (step % 4 === 0) {
+      ctx.strokeStyle = 'rgba(154, 184, 255, 0.34)';
+      ctx.lineWidth = 1.1;
+    } else {
+      ctx.strokeStyle = 'rgba(154, 184, 255, 0.12)';
+      ctx.lineWidth = 1;
+    }
+    ctx.beginPath();
+    ctx.moveTo(x, padY);
+    ctx.lineTo(x, padY + innerH);
+    ctx.stroke();
+  }
+
+  const minNote = baseMidi;
+  const maxNote = baseMidi + (numOctaves * 12) - 1;
+  const noteRange = Math.max(1, maxNote - minNote + 1);
+  const pairs = getGridPairs(eventsInput, maxDurationSec);
+
+  pairs.forEach((pair) => {
+    const start = Math.max(0, Math.min(maxDurationSec, pair.start));
+    const end = Math.max(start + 0.01, Math.min(maxDurationSec, pair.end));
+    const x = padX + ((start / maxDurationSec) * innerW);
+    const w = Math.max(2.5, ((end - start) / maxDurationSec) * innerW);
+
+    const clampedNote = clampMidiNote(Math.round(pair.note));
+    const noteRow = maxNote - clampedNote;
+    const y = padY + (noteRow / noteRange) * innerH;
+    const h = Math.max(3, rowH - 1.5);
+
+    const fill = ctx.createLinearGradient(x, y, x + w, y + h);
+    if (laneType === 'ai') {
+      fill.addColorStop(0, 'rgba(255, 95, 196, 0.98)');
+      fill.addColorStop(1, 'rgba(199, 92, 255, 0.92)');
+      ctx.shadowColor = 'rgba(255, 63, 176, 0.55)';
+    } else {
+      fill.addColorStop(0, 'rgba(76, 255, 255, 0.96)');
+      fill.addColorStop(1, 'rgba(76, 161, 255, 0.9)');
+      ctx.shadowColor = 'rgba(62, 244, 255, 0.6)';
+    }
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y + 0.6, w, h);
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(x, y + 0.6, w, h);
+  });
+
+  ctx.strokeStyle = 'rgba(198, 216, 255, 0.32)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(padX, padY, innerW, innerH);
+
+  if (playheadSec !== null) {
+    const clampedPlayhead = clampValue(playheadSec, 0, maxDurationSec);
+    const x = padX + ((clampedPlayhead / maxDurationSec) * innerW);
+    ctx.strokeStyle = laneType === 'ai'
+      ? 'rgba(255, 95, 196, 0.95)'
+      : 'rgba(76, 255, 255, 0.95)';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = laneType === 'ai'
+      ? 'rgba(255, 63, 176, 0.8)'
+      : 'rgba(62, 244, 255, 0.85)';
+    ctx.beginPath();
+    ctx.moveTo(x, padY);
+    ctx.lineTo(x, padY + innerH);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+}
+
+function renderTurnGrid({
+  userEvents = null,
+  aiEvents = null,
+  phase = gamePhase
+} = {}) {
+  if (userEvents !== null) {
+    gameGridUserEvents = sanitizeEvents(userEvents);
+  }
+  if (aiEvents !== null) {
+    gameGridAIEvents = sanitizeEvents(aiEvents);
+  }
+
+  const userBars = getSelectedUserBars();
+  const aiBars = getSelectedAIBars();
+  const userPlayheadSec = readGridPlayheadSec('user');
+  const aiPlayheadSec = readGridPlayheadSec('ai');
+  drawTurnGridLane(userGridCanvas, gameGridUserEvents, userBars, 'user', userPlayheadSec);
+  drawTurnGridLane(aiGridCanvas, gameGridAIEvents, aiBars, 'ai', aiPlayheadSec);
+
+  if (userGridMeta) {
+    userGridMeta.textContent = `${userBars} bar${userBars > 1 ? 's' : ''}`;
+  }
+  if (aiGridMeta) {
+    aiGridMeta.textContent = `${aiBars} bar${aiBars > 1 ? 's' : ''}`;
+  }
+  if (gridPhaseBadge) {
+    gridPhaseBadge.textContent = getGridPhaseLabel(phase);
+  }
+}
+
 // =============================================================================
 // TERMINAL LOGGING
 // =============================================================================
@@ -1156,6 +1444,10 @@ function noteOn(midiNote, velocity = 100) {
       time: Math.max(0, nowSec() - gameCaptureStartWallSec),
       channel: 0
     });
+    renderTurnGrid({
+      userEvents: getLiveGameCaptureEvents(),
+      phase: gamePhase
+    });
   }
 }
 
@@ -1192,6 +1484,10 @@ function noteOff(midiNote) {
       velocity: 0,
       time: Math.max(0, nowSec() - gameCaptureStartWallSec),
       channel: 0
+    });
+    renderTurnGrid({
+      userEvents: getLiveGameCaptureEvents(),
+      phase: gamePhase
     });
   }
 }
@@ -1628,6 +1924,9 @@ async function startGameLoop() {
   gameCaptureActive = false;
   gameCapturedEvents = [];
   gameCaptureActiveNotes.clear();
+  gameGridUserEvents = [];
+  gameGridAIEvents = [];
+  stopAllGridPlayheads();
   hideCountdownOverlay();
   clearTrackedGameTimeouts();
   gameClockOriginSec = nowSec();
@@ -1662,6 +1961,7 @@ async function startGameLoop() {
     'timestamp'
   );
   logToTerminal('', '');
+  renderTurnGrid({ phase: gamePhase });
 
   startGameMetronome(sessionId);
   scheduleUserTurn(sessionId);
@@ -1672,6 +1972,7 @@ function stopGameLoop(reason = 'Game stopped') {
   clearTrackedGameTimeouts();
   hideCountdownOverlay();
   stopGameMetronome();
+  stopAllGridPlayheads();
   gamePhase = 'idle';
   gameCaptureActive = false;
   gameCapturedEvents = [];
@@ -1692,6 +1993,7 @@ function stopGameLoop(reason = 'Game stopped') {
   keyboardEl.querySelectorAll('.key').forEach(k => {
     k.style.filter = '';
   });
+  renderTurnGrid({ phase: gamePhase });
   logToTerminal(`🎮 ${reason}`, 'timestamp');
 }
 
@@ -1702,7 +2004,14 @@ function beginUserCaptureWindow(sessionId, userBars) {
   gameCaptureStartWallSec = nowSec();
   gameCapturedEvents = [];
   gameCaptureActiveNotes.clear();
+  gameGridUserEvents = [];
+  startGridPlayhead('user', barsToSeconds(userBars));
+  stopGridPlayhead('ai');
   statusEl.textContent = `Turn ${gameTurn}: your call (${userBars} bar${userBars > 1 ? 's' : ''})`;
+  renderTurnGrid({
+    userEvents: [],
+    phase: gamePhase
+  });
   logToTerminal(`Turn ${gameTurn}: your call started`, 'timestamp');
 }
 
@@ -1721,6 +2030,25 @@ function finalizeOpenGameCaptureNotes(captureDurationSec) {
   gameCaptureActiveNotes.clear();
 }
 
+function getLiveGameCaptureEvents() {
+  const live = [...gameCapturedEvents];
+  if (!gameCaptureActive) {
+    return sortEventsChronologically(live);
+  }
+
+  const nowCaptureSec = Math.max(0, nowSec() - gameCaptureStartWallSec);
+  gameCaptureActiveNotes.forEach((note) => {
+    live.push({
+      type: 'note_off',
+      note,
+      velocity: 0,
+      time: nowCaptureSec,
+      channel: 0
+    });
+  });
+  return sortEventsChronologically(live);
+}
+
 function scheduleUserTurn(sessionId) {
   if (!gameActive || sessionId !== gameSessionId) return;
   gameTurn += 1;
@@ -1729,6 +2057,14 @@ function scheduleUserTurn(sessionId) {
   const userEndSec = userStartSec + barsToSeconds(userBars);
 
   gamePhase = 'user_countdown';
+  gameGridUserEvents = [];
+  gameGridAIEvents = [];
+  stopAllGridPlayheads();
+  renderTurnGrid({
+    userEvents: [],
+    aiEvents: [],
+    phase: gamePhase
+  });
   logToTerminal(
     `Turn ${gameTurn}: user countdown (${userBars} bar${userBars > 1 ? 's' : ''})`,
     'timestamp'
@@ -1743,11 +2079,17 @@ function scheduleUserTurn(sessionId) {
 
 async function finishUserTurn(sessionId) {
   if (!gameActive || sessionId !== gameSessionId) return;
+  stopGridPlayhead('user');
   const captureDurationSec = Math.max(0, nowSec() - gameCaptureStartWallSec);
   finalizeOpenGameCaptureNotes(captureDurationSec);
   gameCaptureActive = false;
+  const userGridEvents = sanitizeEvents(gameCapturedEvents);
   const callEvents = normalizeEventsToZero(gameCapturedEvents);
   gameCapturedEvents = [];
+  renderTurnGrid({
+    userEvents: userGridEvents,
+    phase: gamePhase
+  });
 
   if (callEvents.length === 0) {
     statusEl.textContent = `Turn ${gameTurn}: no notes, try again`;
@@ -1760,6 +2102,7 @@ async function finishUserTurn(sessionId) {
 
   try {
     gamePhase = 'ai_thinking';
+    renderTurnGrid({ phase: gamePhase });
     statusEl.textContent = `Turn ${gameTurn}: AI thinking...`;
     logToTerminal(`Turn ${gameTurn}: AI is thinking...`, 'timestamp');
 
@@ -1781,6 +2124,10 @@ async function finishUserTurn(sessionId) {
 
     const aiStartSec = nextBarAlignedStart(GAME_COUNTIN_BEATS);
     gamePhase = 'ai_countdown';
+    renderTurnGrid({
+      aiEvents,
+      phase: gamePhase
+    });
     logToTerminal(
       `Turn ${gameTurn}: AI countdown (${aiBars} bar${aiBars > 1 ? 's' : ''})`,
       'timestamp'
@@ -1790,6 +2137,8 @@ async function finishUserTurn(sessionId) {
     scheduleGameAt(aiStartSec, async () => {
       if (!gameActive || sessionId !== gameSessionId) return;
       gamePhase = 'ai_playback';
+      startGridPlayhead('ai', getEventsDurationSec(aiEvents));
+      renderTurnGrid({ phase: gamePhase });
       statusEl.textContent = `Turn ${gameTurn}: AI responds`;
       logToTerminal(
         `Turn ${gameTurn}: AI response (${processedResponse.label}, ${aiBars} bar${aiBars > 1 ? 's' : ''})`,
@@ -1799,6 +2148,7 @@ async function finishUserTurn(sessionId) {
         useAISynth: true,
         shouldAbort: () => !gameActive || sessionId !== gameSessionId
       });
+      stopGridPlayhead('ai');
 
       if (!gameActive || sessionId !== gameSessionId) return;
       scheduleUserTurn(sessionId);
@@ -1968,6 +2318,9 @@ function bindUIEventListeners() {
       element.addEventListener('change', () => {
         const result = getter();
         logToTerminal(message(result), 'timestamp');
+        if (element === userBarsSelect || element === aiBarsSelect) {
+          renderTurnGrid({ phase: gamePhase });
+        }
       });
     }
   });
@@ -2110,6 +2463,10 @@ function bindUIEventListeners() {
       logToTerminal('🚨 PANIC - All notes stopped', 'timestamp');
     });
   }
+
+  window.addEventListener('resize', () => {
+    renderTurnGrid({ phase: gamePhase });
+  });
 }
 
 // =============================================================================
@@ -2155,6 +2512,7 @@ async function init() {
   // Setup keyboard event listeners and UI
   attachPointerEvents();
   initTerminal();
+  renderTurnGrid({ phase: gamePhase });
   const runtimeMode = getSelectedRuntime();
   const runtimeLabel = runtimeMode === 'gpu' ? 'ZeroGPU' : (runtimeMode === 'auto' ? 'Auto (GPU->CPU)' : 'CPU');
   logToTerminal(`Runtime mode: ${runtimeLabel}`, 'timestamp');

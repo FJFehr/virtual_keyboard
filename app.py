@@ -270,4 +270,4 @@ with gr.Blocks(title="Virtual MIDI Keyboard", css=css_content + hidden_bridge_cs
 # =============================================================================
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(share=True)
